@@ -40,9 +40,12 @@ The data members `self.doc_header', `self.misc_header', and
 `self.undoc_header' set the headers used for the help function's
 listings of documented functions, miscellaneous topics, and undocumented
 functions respectively.
+
+These interpreters use raw_input; thus, if the readline module is loaded,
+they automatically support Emacs-like command history and editing features.
 """
 
-import string, sys
+import string
 
 __all__ = ["Cmd"]
 
@@ -84,6 +87,7 @@ class Cmd:
         sys.stdin and sys.stdout are used.
 
         """
+        import sys
         if stdin is not None:
             self.stdin = stdin
         else:
@@ -123,7 +127,7 @@ class Cmd:
                 else:
                     if self.use_rawinput:
                         try:
-                            line = input(self.prompt)
+                            line = raw_input(self.prompt)
                         except EOFError:
                             line = 'EOF'
                     else:
@@ -277,18 +281,21 @@ class Cmd:
             return None
 
     def get_names(self):
-        # This method used to pull in base class attributes
-        # at a time dir() didn't do it yet.
-        return dir(self.__class__)
+        # Inheritance says we have to look in class and
+        # base classes; order is not important.
+        names = []
+        classes = [self.__class__]
+        while classes:
+            aclass = classes.pop(0)
+            if aclass.__bases__:
+                classes = classes + list(aclass.__bases__)
+            names = names + dir(aclass)
+        return names
 
     def complete_help(self, *args):
-        commands = set(self.completenames(*args))
-        topics = set(a[5:] for a in self.get_names()
-                     if a.startswith('help_' + args[0]))
-        return list(commands | topics)
+        return self.completenames(*args)
 
     def do_help(self, arg):
-        'List available commands with "help" or detailed help with "help cmd".'
         if arg:
             # XXX check arg syntax
             try:
@@ -330,7 +337,7 @@ class Cmd:
                         cmds_undoc.append(cmd)
             self.stdout.write("%s\n"%str(self.doc_leader))
             self.print_topics(self.doc_header,   cmds_doc,   15,80)
-            self.print_topics(self.misc_header,  list(help.keys()),15,80)
+            self.print_topics(self.misc_header,  help.keys(),15,80)
             self.print_topics(self.undoc_header, cmds_undoc, 15,80)
 
     def print_topics(self, header, cmds, cmdlen, maxcol):
@@ -350,12 +357,11 @@ class Cmd:
         if not list:
             self.stdout.write("<empty>\n")
             return
-
         nonstrings = [i for i in range(len(list))
                         if not isinstance(list[i], str)]
         if nonstrings:
-            raise TypeError("list[i] not a string for i in %s"
-                            % ", ".join(map(str, nonstrings)))
+            raise TypeError, ("list[i] not a string for i in %s" %
+                              ", ".join(map(str, nonstrings)))
         size = len(list)
         if size == 1:
             self.stdout.write('%s\n'%str(list[0]))

@@ -46,7 +46,7 @@ def find_all_on_path(filename, extras = None):
 # is available.
 def find_working_perl(perls):
     for perl in perls:
-        fh = os.popen('"%s" -e "use Win32;"' % perl)
+        fh = os.popen(perl + ' -e "use Win32;"')
         fh.read()
         rc = fh.close()
         if rc:
@@ -102,8 +102,11 @@ def create_makefile64(makefile, m32):
     """
     if not os.path.isfile(m32):
         return
-    with open(m32) as fin:
-        with open(makefile, 'w') as fout:
+    # 2.4 compatibility
+    fin = open(m32)
+    if 1: # with open(m32) as fin:
+        fout = open(makefile, 'w')
+        if 1: # with open(makefile, 'w') as fout:
             for line in fin:
                 line = line.replace("=tmp32", "=tmp64")
                 line = line.replace("=out32", "=out64")
@@ -121,9 +124,13 @@ def fix_makefile(makefile):
     """
     if not os.path.isfile(makefile):
         return
-    with open(makefile) as fin:
+    # 2.4 compatibility
+    fin = open(makefile)
+    if 1: # with open(makefile) as fin:
         lines = fin.readlines()
-    with open(makefile, 'w') as fout:
+        fin.close()
+    fout = open(makefile, 'w')
+    if 1: # with open(makefile, 'w') as fout:
         for line in lines:
             if line.startswith("PERL="):
                 continue
@@ -139,28 +146,13 @@ def fix_makefile(makefile):
                         line = line + noalgo
                 line = line + '\n'
             fout.write(line)
+    fout.close()
 
 def run_configure(configure, do_script):
-    print("perl Configure "+configure+" no-idea no-mdc2")
-    os.system("perl Configure "+configure+" no-idea no-mdc2")
+    print("perl Configure "+configure)
+    os.system("perl Configure "+configure)
     print(do_script)
     os.system(do_script)
-
-def cmp(f1, f2):
-    bufsize = 1024 * 8
-    with open(f1, 'rb') as fp1, open(f2, 'rb') as fp2:
-        while True:
-            b1 = fp1.read(bufsize)
-            b2 = fp2.read(bufsize)
-            if b1 != b2:
-                return False
-            if not b1:
-                return True
-
-def copy(src, dst):
-    if os.path.isfile(dst) and cmp(src, dst):
-        return
-    shutil.copy(src, dst)
 
 def main():
     build_all = "-a" in sys.argv
@@ -177,14 +169,12 @@ def main():
         do_script = "ms\\do_nasm"
         makefile="ms\\nt.mak"
         m32 = makefile
-        dirsuffix = "32"
     elif sys.argv[2] == "x64":
         arch="amd64"
         configure = "VC-WIN64A"
         do_script = "ms\\do_win64a"
         makefile = "ms\\nt64.mak"
         m32 = makefile.replace('64', '')
-        dirsuffix = "64"
         #os.environ["VSEXTCOMP_USECL"] = "MS_OPTERON"
     else:
         raise ValueError(str(sys.argv))
@@ -196,10 +186,10 @@ def main():
     # as "well known" locations
     perls = find_all_on_path("perl.exe", ["\\perl\\bin", "C:\\perl\\bin"])
     perl = find_working_perl(perls)
-    if perl:
-        print("Found a working perl at '%s'" % (perl,))
-    else:
+    if perl is None:
         print("No Perl installation was found. Existing Makefiles are used.")
+
+    print("Found a working perl at '%s'" % (perl,))
     sys.stdout.flush()
     # Look for SSL 2 levels up from pcbuild - ie, same place zlib etc all live.
     ssl_dir = find_best_ssl_dir(("..\\..",))
@@ -238,27 +228,18 @@ def main():
             if arch == "amd64":
                 create_makefile64(makefile, m32)
             fix_makefile(makefile)
-            copy(r"crypto\buildinf.h", r"crypto\buildinf_%s.h" % arch)
-            copy(r"crypto\opensslconf.h", r"crypto\opensslconf_%s.h" % arch)
-
-        # If the assembler files don't exist in tmpXX, copy them there
-        if perl is None and os.path.exists("asm"+dirsuffix):
-            if not os.path.exists("tmp"+dirsuffix):
-                os.mkdir("tmp"+dirsuffix)
-            for f in os.listdir("asm"+dirsuffix):
-                if not f.endswith(".asm"): continue
-                if os.path.isfile(r"tmp%s\%s" % (dirsuffix, f)): continue
-                shutil.copy(r"asm%s\%s" % (dirsuffix, f), "tmp"+dirsuffix)
+            shutil.copy(r"crypto\buildinf.h", r"crypto\buildinf_%s.h" % arch)
+            shutil.copy(r"crypto\opensslconf.h", r"crypto\opensslconf_%s.h" % arch)
 
         # Now run make.
         if arch == "amd64":
-            rc = os.system("ml64 -c -Foms\\uptable.obj ms\\uptable.asm")
+            rc = os.system(r"ml64 -c -Foms\uptable.obj ms\uptable.asm")
             if rc:
                 print("ml64 assembler has failed.")
                 sys.exit(rc)
 
-        copy(r"crypto\buildinf_%s.h" % arch, r"crypto\buildinf.h")
-        copy(r"crypto\opensslconf_%s.h" % arch, r"crypto\opensslconf.h")
+        shutil.copy(r"crypto\buildinf_%s.h" % arch, r"crypto\buildinf.h")
+        shutil.copy(r"crypto\opensslconf_%s.h" % arch, r"crypto\opensslconf.h")
 
         #makeCommand = "nmake /nologo PERL=\"%s\" -f \"%s\"" %(perl, makefile)
         makeCommand = "nmake /nologo -f \"%s\"" % makefile

@@ -1,5 +1,8 @@
 """Utilities to support packages."""
 
+# NOTE: This module must remain compatible with Python 2.3, as it is shared
+# by setuptools for distribution with Python 2.3 and up.
+
 import os
 import sys
 import imp
@@ -8,7 +11,7 @@ from types import ModuleType
 
 __all__ = [
     'get_importer', 'iter_importers', 'get_loader', 'find_loader',
-    'walk_packages', 'iter_modules', 'get_data',
+    'walk_packages', 'iter_modules',
     'ImpImporter', 'ImpLoader', 'read_code', 'extend_path',
 ]
 
@@ -241,8 +244,7 @@ class ImpLoader:
         return mod
 
     def get_data(self, pathname):
-        with open(pathname, "rb") as file:
-            return file.read()
+        return open(pathname, "rb").read()
 
     def _reopen(self):
         if self.file and self.file.closed:
@@ -319,7 +321,8 @@ try:
     from zipimport import zipimporter
 
     def iter_zipimport_modules(importer, prefix=''):
-        dirlist = sorted(zipimport._zip_directory_cache[importer.archive])
+        dirlist = zipimport._zip_directory_cache[importer.archive].keys()
+        dirlist.sort()
         _prefix = importer.prefix
         plen = len(_prefix)
         yielded = {}
@@ -507,13 +510,15 @@ def extend_path(path, name):
         return path
 
     pname = os.path.join(*name.split('.')) # Reconstitute as relative path
-    sname_pkg = name + ".pkg"
-    init_py = "__init__.py"
+    # Just in case os.extsep != '.'
+    sname = os.extsep.join(name.split('.'))
+    sname_pkg = sname + os.extsep + "pkg"
+    init_py = "__init__" + os.extsep + "py"
 
     path = path[:] # Start with a copy of the existing path
 
     for dir in sys.path:
-        if not isinstance(dir, str) or not os.path.isdir(dir):
+        if not isinstance(dir, basestring) or not os.path.isdir(dir):
             continue
         subdir = os.path.join(dir, pname)
         # XXX This may still add duplicate entries to path on
@@ -527,7 +532,7 @@ def extend_path(path, name):
         if os.path.isfile(pkgfile):
             try:
                 f = open(pkgfile)
-            except IOError as msg:
+            except IOError, msg:
                 sys.stderr.write("Can't open %s: %s\n" %
                                  (pkgfile, msg))
             else:

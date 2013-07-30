@@ -16,14 +16,14 @@ class Test(unittest.TestCase):
 
         y = X.from_buffer(a)
         self.assertEqual(y.c_int, a[0])
-        self.assertFalse(y.init_called)
+        self.failIf(y.init_called)
 
         self.assertEqual(x[:], a.tolist())
 
         a[0], a[-1] = 200, -200
         self.assertEqual(x[:], a.tolist())
 
-        self.assertTrue(a in x._objects.values())
+        self.assert_(a in x._objects.values())
 
         self.assertRaises(ValueError,
                           c_int.from_buffer, a, -1)
@@ -49,12 +49,12 @@ class Test(unittest.TestCase):
 
         y = X.from_buffer_copy(a)
         self.assertEqual(y.c_int, a[0])
-        self.assertFalse(y.init_called)
+        self.failIf(y.init_called)
 
-        self.assertEqual(x[:], list(range(16)))
+        self.assertEqual(x[:], range(16))
 
         a[0], a[-1] = 200, -200
-        self.assertEqual(x[:], list(range(16)))
+        self.assertEqual(x[:], range(16))
 
         self.assertEqual(x._objects, None)
 
@@ -62,10 +62,10 @@ class Test(unittest.TestCase):
                           c_int.from_buffer, a, -1)
 
         del a; gc.collect(); gc.collect(); gc.collect()
-        self.assertEqual(x[:], list(range(16)))
+        self.assertEqual(x[:], range(16))
 
-        x = (c_char * 16).from_buffer_copy(b"a" * 16)
-        self.assertEqual(x[:], b"a" * 16)
+        x = (c_char * 16).from_buffer_copy("a" * 16)
+        self.assertEqual(x[:], "a" * 16)
 
     def test_fom_buffer_copy_with_offset(self):
         a = array.array("i", range(16))

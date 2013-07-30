@@ -1,9 +1,8 @@
 import mimetypes
-import io
+import StringIO
 import unittest
-import sys
 
-from test import support
+from test import test_support
 
 # Tell it we don't know about external files:
 mimetypes.knownfiles = []
@@ -31,7 +30,7 @@ class MimeTypesTestCase(unittest.TestCase):
 
     def test_file_parsing(self):
         eq = self.assertEqual
-        sio = io.StringIO("x-application/x-unittest pyunit\n")
+        sio = StringIO.StringIO("x-application/x-unittest pyunit\n")
         self.db.readfp(sio)
         eq(self.db.guess_type("foo.pyunit"),
            ("x-application/x-unittest", None))
@@ -48,7 +47,7 @@ class MimeTypesTestCase(unittest.TestCase):
 
     def test_guess_all_types(self):
         eq = self.assertEqual
-        unless = self.assertTrue
+        unless = self.failUnless
         # First try strict.  Use a set here for testing the results because if
         # test_urllib2 is run before test_mimetypes, global state is modified
         # such that the 'all' set will have more items in it.
@@ -63,32 +62,8 @@ class MimeTypesTestCase(unittest.TestCase):
         eq(all, [])
 
 
-@unittest.skipUnless(sys.platform.startswith("win"), "Windows only")
-class Win32MimeTypesTestCase(unittest.TestCase):
-    def setUp(self):
-        # ensure all entries actually come from the Windows registry
-        self.original_types_map = mimetypes.types_map.copy()
-        mimetypes.types_map.clear()
-        mimetypes.init()
-        self.db = mimetypes.MimeTypes()
-
-    def tearDown(self):
-        # restore default settings
-        mimetypes.types_map.clear()
-        mimetypes.types_map.update(self.original_types_map)
-
-    def test_registry_parsing(self):
-        # the original, minimum contents of the MIME database in the
-        # Windows registry is undocumented AFAIK.
-        # Use file types that should *always* exist:
-        eq = self.assertEqual
-        eq(self.db.guess_type("foo.txt"), ("text/plain", None))
-
-
 def test_main():
-    support.run_unittest(MimeTypesTestCase,
-        Win32MimeTypesTestCase
-        )
+    test_support.run_unittest(MimeTypesTestCase)
 
 
 if __name__ == "__main__":

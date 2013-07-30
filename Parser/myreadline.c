@@ -29,6 +29,10 @@ static PyThread_type_lock _PyOS_ReadlineLock = NULL;
 
 int (*PyOS_InputHook)(void) = NULL;
 
+#ifdef RISCOS
+int Py_RISCOSWimpFlag;
+#endif
+
 /* This function restarts a fgets() after an EINTR error occurred
    except if PyOS_InterruptOccurred() returns true. */
 
@@ -36,11 +40,10 @@ static int
 my_fgets(char *buf, int len, FILE *fp)
 {
     char *p;
-    while (1) {
+    for (;;) {
         if (PyOS_InputHook != NULL)
             (void)(PyOS_InputHook)();
         errno = 0;
-        clearerr(fp);
         p = fgets(buf, len, fp);
         if (p != NULL)
             return 0; /* No error */
@@ -74,7 +77,6 @@ my_fgets(char *buf, int len, FILE *fp)
         }
 #endif /* MS_WINDOWS */
         if (feof(fp)) {
-            clearerr(fp);
             return -1; /* EOF */
         }
 #ifdef EINTR
@@ -87,10 +89,9 @@ my_fgets(char *buf, int len, FILE *fp)
 #ifdef WITH_THREAD
             PyEval_SaveThread();
 #endif
-            if (s < 0)
-                    return 1;
-	    /* try again */
-            continue;
+            if (s < 0) {
+                return 1;
+            }
         }
 #endif
         if (PyOS_InterruptOccurred()) {
@@ -113,8 +114,17 @@ PyOS_StdioReadline(FILE *sys_stdin, FILE *sys_stdout, char *prompt)
     if ((p = (char *)PyMem_MALLOC(n)) == NULL)
         return NULL;
     fflush(sys_stdout);
+#ifndef RISCOS
     if (prompt)
         fprintf(stderr, "%s", prompt);
+#else
+    if (prompt) {
+        if(Py_RISCOSWimpFlag)
+            fprintf(stderr, "\x0cr%s\x0c", prompt);
+        else
+            fprintf(stderr, "%s", prompt);
+    }
+#endif
     fflush(stderr);
     switch (my_fgets(p, (int)n, sys_stdin)) {
     case 0: /* Normal case */

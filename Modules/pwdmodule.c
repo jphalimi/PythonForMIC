@@ -2,6 +2,7 @@
 /* UNIX password file access module */
 
 #include "Python.h"
+#include "structseq.h"
 
 #include <sys/types.h>
 #include <pwd.h>
@@ -45,12 +46,10 @@ static int initialized;
 static PyTypeObject StructPwdType;
 
 static void
-sets(PyObject *v, int i, const char* val)
+sets(PyObject *v, int i, char* val)
 {
-  if (val) {
-      PyObject *o = PyUnicode_DecodeFSDefault(val);
-      PyStructSequence_SET_ITEM(v, i, o);
-  }
+  if (val)
+      PyStructSequence_SET_ITEM(v, i, PyString_FromString(val));
   else {
       PyStructSequence_SET_ITEM(v, i, Py_None);
       Py_INCREF(Py_None);
@@ -65,7 +64,7 @@ mkpwent(struct passwd *p)
     if (v == NULL)
         return NULL;
 
-#define SETI(i,val) PyStructSequence_SET_ITEM(v, i, PyLong_FromLong((long) val))
+#define SETI(i,val) PyStructSequence_SET_ITEM(v, i, PyInt_FromLong((long) val))
 #define SETS(i,val) sets(v, i, val)
 
     SETS(setIndex++, p->pw_name);
@@ -99,7 +98,7 @@ PyDoc_STRVAR(pwd_getpwuid__doc__,
 "getpwuid(uid) -> (pw_name,pw_passwd,pw_uid,\n\
                   pw_gid,pw_gecos,pw_dir,pw_shell)\n\
 Return the password database entry for the given numeric user ID.\n\
-See help(pwd) for more on password database entries.");
+See pwd.__doc__ for more on password database entries.");
 
 static PyObject *
 pwd_getpwuid(PyObject *self, PyObject *args)
@@ -120,30 +119,21 @@ PyDoc_STRVAR(pwd_getpwnam__doc__,
 "getpwnam(name) -> (pw_name,pw_passwd,pw_uid,\n\
                     pw_gid,pw_gecos,pw_dir,pw_shell)\n\
 Return the password database entry for the given user name.\n\
-See help(pwd) for more on password database entries.");
+See pwd.__doc__ for more on password database entries.");
 
 static PyObject *
 pwd_getpwnam(PyObject *self, PyObject *args)
 {
     char *name;
     struct passwd *p;
-    PyObject *arg, *bytes, *retval = NULL;
-
-    if (!PyArg_ParseTuple(args, "U:getpwnam", &arg))
+    if (!PyArg_ParseTuple(args, "s:getpwnam", &name))
         return NULL;
-    if ((bytes = PyUnicode_EncodeFSDefault(arg)) == NULL)
-        return NULL;
-    if (PyBytes_AsStringAndSize(bytes, &name, NULL) == -1)
-        goto out;
     if ((p = getpwnam(name)) == NULL) {
         PyErr_Format(PyExc_KeyError,
                      "getpwnam(): name not found: %s", name);
-        goto out;
+        return NULL;
     }
-    retval = mkpwent(p);
-out:
-    Py_DECREF(bytes);
-    return retval;
+    return mkpwent(p);
 }
 
 #ifdef HAVE_GETPWENT
@@ -151,7 +141,7 @@ PyDoc_STRVAR(pwd_getpwall__doc__,
 "getpwall() -> list_of_entries\n\
 Return a list of all available password database entries, \
 in arbitrary order.\n\
-See help(pwd) for more on password database entries.");
+See pwd.__doc__ for more on password database entries.");
 
 static PyObject *
 pwd_getpwall(PyObject *self)
@@ -190,33 +180,21 @@ static PyMethodDef pwd_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-static struct PyModuleDef pwdmodule = {
-    PyModuleDef_HEAD_INIT,
-    "pwd",
-    pwd__doc__,
-    -1,
-    pwd_methods,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
-
 PyMODINIT_FUNC
-PyInit_pwd(void)
+initpwd(void)
 {
     PyObject *m;
-    m = PyModule_Create(&pwdmodule);
+    m = Py_InitModule3("pwd", pwd_methods, pwd__doc__);
     if (m == NULL)
-        return NULL;
+        return;
 
-    if (!initialized) {
+    if (!initialized)
         PyStructSequence_InitType(&StructPwdType,
                                   &struct_pwd_type_desc);
-        initialized = 1;
-    }
     Py_INCREF((PyObject *) &StructPwdType);
     PyModule_AddObject(m, "struct_passwd", (PyObject *) &StructPwdType);
-    return m;
+    /* And for b/w compatibility (this was defined by mistake): */
+    Py_INCREF((PyObject *) &StructPwdType);
+    PyModule_AddObject(m, "struct_pwent", (PyObject *) &StructPwdType);
+    initialized = 1;
 }

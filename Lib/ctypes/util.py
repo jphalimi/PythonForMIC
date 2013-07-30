@@ -1,5 +1,7 @@
+######################################################################
+#  This file should be kept compatible with Python 2.3, see PEP 291. #
+######################################################################
 import sys, os
-import contextlib
 
 # find_library(name) returns the pathname of a library, or None.
 if os.name == "nt":
@@ -94,18 +96,16 @@ elif os.name == "posix":
               '$CC -Wl,-t -o ' + ccout + ' 2>&1 -l' + name
         try:
             f = os.popen(cmd)
-            try:
-                trace = f.read()
-            finally:
-                rv = f.close()
+            trace = f.read()
+            rv = f.close()
         finally:
             try:
                 os.unlink(ccout)
-            except OSError as e:
+            except OSError, e:
                 if e.errno != errno.ENOENT:
                     raise
         if rv == 10:
-            raise OSError('gcc or cc command not found')
+            raise OSError, 'gcc or cc command not found'
         res = re.search(expr, trace)
         if not res:
             return None
@@ -118,9 +118,7 @@ elif os.name == "posix":
             if not f:
                 return None
             cmd = "/usr/ccs/bin/dump -Lpv 2>/dev/null " + f
-            with contextlib.closing(os.popen(cmd)) as f:
-                data = f.read()
-            res = re.search(r'\[.*\]\sSONAME\s+([^\s]+)', data)
+            res = re.search(r'\[.*\]\sSONAME\s+([^\s]+)', os.popen(cmd).read())
             if not res:
                 return None
             return res.group(1)
@@ -135,10 +133,8 @@ elif os.name == "posix":
             dump = f.read()
             rv = f.close()
             if rv == 10:
-                raise OSError('objdump command not found')
-            with contextlib.closing(os.popen(cmd)) as f:
-                data = f.read()
-            res = re.search(r'\sSONAME\s+([^\s]+)', data)
+                raise OSError, 'objdump command not found'
+            res = re.search(r'\sSONAME\s+([^\s]+)', os.popen(cmd).read())
             if not res:
                 return None
             return res.group(1)
@@ -156,17 +152,16 @@ elif os.name == "posix":
                     nums.insert(0, int(parts.pop()))
             except ValueError:
                 pass
-            return nums or [ sys.maxsize ]
+            return nums or [ sys.maxint ]
 
         def find_library(name):
             ename = re.escape(name)
             expr = r':-l%s\.\S+ => \S*/(lib%s\.\S+)' % (ename, ename)
-            with contextlib.closing(os.popen('/sbin/ldconfig -r 2>/dev/null')) as f:
-                data = f.read()
-            res = re.findall(expr, data)
+            res = re.findall(expr,
+                             os.popen('/sbin/ldconfig -r 2>/dev/null').read())
             if not res:
                 return _get_soname(_findLib_gcc(name))
-            res.sort(key=_num_version)
+            res.sort(cmp= lambda x,y: cmp(_num_version(x), _num_version(y)))
             return res[-1]
 
     else:
@@ -174,15 +169,12 @@ elif os.name == "posix":
         def _findLib_ldconfig(name):
             # XXX assuming GLIBC's ldconfig (with option -p)
             expr = r'/[^\(\)\s]*lib%s\.[^\(\)\s]*' % re.escape(name)
-            with contextlib.closing(os.popen('/sbin/ldconfig -p 2>/dev/null')) as f:
-                data = f.read()
-            res = re.search(expr, data)
+            res = re.search(expr,
+                            os.popen('/sbin/ldconfig -p 2>/dev/null').read())
             if not res:
                 # Hm, this works only for libs needed by the python executable.
                 cmd = 'ldd %s 2>/dev/null' % sys.executable
-                with contextlib.closing(os.popen(cmd)) as f:
-                    data = f.read()
-                res = re.search(expr, data)
+                res = re.search(expr, os.popen(cmd).read())
                 if not res:
                     return None
             return res.group(0)
@@ -205,9 +197,8 @@ elif os.name == "posix":
             # XXX assuming GLIBC's ldconfig (with option -p)
             expr = r'(\S+)\s+\((%s(?:, OS ABI:[^\)]*)?)\)[^/]*(/[^\(\)\s]*lib%s\.[^\(\)\s]*)' \
                    % (abi_type, re.escape(name))
-            with contextlib.closing(os.popen('LC_ALL=C LANG=C /sbin/ldconfig -p 2>/dev/null')) as f:
-                data = f.read()
-            res = re.search(expr, data)
+            res = re.search(expr,
+                            os.popen('LANG=C /sbin/ldconfig -p 2>/dev/null').read())
             if not res:
                 return None
             return res.group(1)
@@ -221,15 +212,15 @@ elif os.name == "posix":
 def test():
     from ctypes import cdll
     if os.name == "nt":
-        print(cdll.msvcrt)
-        print(cdll.load("msvcrt"))
-        print(find_library("msvcrt"))
+        print cdll.msvcrt
+        print cdll.load("msvcrt")
+        print find_library("msvcrt")
 
     if os.name == "posix":
         # find and load_version
-        print(find_library("m"))
-        print(find_library("c"))
-        print(find_library("bz2"))
+        print find_library("m")
+        print find_library("c")
+        print find_library("bz2")
 
         # getattr
 ##        print cdll.m
@@ -237,14 +228,14 @@ def test():
 
         # load
         if sys.platform == "darwin":
-            print(cdll.LoadLibrary("libm.dylib"))
-            print(cdll.LoadLibrary("libcrypto.dylib"))
-            print(cdll.LoadLibrary("libSystem.dylib"))
-            print(cdll.LoadLibrary("System.framework/System"))
+            print cdll.LoadLibrary("libm.dylib")
+            print cdll.LoadLibrary("libcrypto.dylib")
+            print cdll.LoadLibrary("libSystem.dylib")
+            print cdll.LoadLibrary("System.framework/System")
         else:
-            print(cdll.LoadLibrary("libm.so"))
-            print(cdll.LoadLibrary("libcrypt.so"))
-            print(find_library("crypt"))
+            print cdll.LoadLibrary("libm.so")
+            print cdll.LoadLibrary("libcrypt.so")
+            print find_library("crypt")
 
 if __name__ == "__main__":
     test()

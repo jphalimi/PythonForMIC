@@ -42,7 +42,7 @@ classes (a class is new style if it inherits from :class:`object` or
 
 Descriptors are a powerful, general purpose protocol.  They are the mechanism
 behind properties, methods, static methods, class methods, and :func:`super()`.
-They are used throughout Python itself to implement the new style classes
+They are used used throughout Python itself to implement the new style classes
 introduced in version 2.2.  Descriptors simplify the underlying C-code and offer
 a flexible set of new tools for everyday Python programs.
 
@@ -97,7 +97,7 @@ transforms ``b.x`` into ``type(b).__dict__['x'].__get__(b, type(b))``.  The
 implementation works through a precedence chain that gives data descriptors
 priority over instance variables, instance variables priority over non-data
 descriptors, and assigns lowest priority to :meth:`__getattr__` if provided.  The
-full C implementation can be found in :c:func:`PyObject_GenericGetAttr()` in
+full C implementation can be found in :cfunc:`PyObject_GenericGetAttr()` in
 `Objects/object.c <http://svn.python.org/view/python/trunk/Objects/object.c?view=markup>`_\.
 
 For classes, the machinery is in :meth:`type.__getattribute__` which transforms
@@ -131,7 +131,7 @@ search using :meth:`object.__getattribute__`.
 Note, in Python 2.2, ``super(B, obj).m()`` would only invoke :meth:`__get__` if
 ``m`` was a data descriptor.  In Python 2.3, non-data descriptors also get
 invoked unless an old-style class is involved.  The implementation details are
-in :c:func:`super_getattro()` in
+in :cfunc:`super_getattro()` in
 `Objects/typeobject.c <http://svn.python.org/view/python/trunk/Objects/typeobject.c?view=markup>`_
 and a pure Python equivalent can be found in `Guido's Tutorial`_.
 
@@ -163,11 +163,11 @@ descriptor is useful for monitoring just a few chosen attributes::
             self.name = name
 
         def __get__(self, obj, objtype):
-            print('Retrieving', self.name)
+            print 'Retrieving', self.name
             return self.val
 
         def __set__(self, obj, val):
-            print('Updating', self.name)
+            print 'Updating' , self.name
             self.val = val
 
     >>> class MyClass(object):
@@ -296,8 +296,8 @@ Running the interpreter shows how the function descriptor works in practice::
     <bound method D.f of <__main__.D object at 0x00B18C90>>
 
 The output suggests that bound and unbound methods are two different types.
-While they could have been implemented that way, the actual C implementation of
-:c:type:`PyMethod_Type` in
+While they could have been implemented that way, the actual C implemention of
+:ctype:`PyMethod_Type` in
 `Objects/classobject.c <http://svn.python.org/view/python/trunk/Objects/classobject.c?view=markup>`_
 is a single object with two different representations depending on whether the
 :attr:`im_self` field is set or is *NULL* (the C equivalent of *None*).
@@ -357,12 +357,12 @@ calls are unexciting::
 
     >>> class E(object):
          def f(x):
-              print(x)
+              print x
          f = staticmethod(f)
 
-    >>> print(E.f(3))
+    >>> print E.f(3)
     3
-    >>> print(E().f(3))
+    >>> print E().f(3)
     3
 
 Using the non-data descriptor protocol, a pure Python version of
@@ -386,9 +386,9 @@ for whether the caller is an object or a class::
               return klass.__name__, x
          f = classmethod(f)
 
-    >>> print(E.f(3))
+    >>> print E.f(3)
     ('E', 3)
-    >>> print(E().f(3))
+    >>> print E().f(3)
     ('E', 3)
 
 

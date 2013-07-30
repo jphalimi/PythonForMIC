@@ -24,7 +24,6 @@ class BaseFix(object):
 
     PATTERN = None  # Most subclasses should override with a string literal
     pattern = None  # Compiled pattern, set by compile_pattern()
-    pattern_tree = None # Tree representation of the pattern
     options = None  # Options object passed to initializer
     filename = None # The filename (set by set_filename)
     logger = None   # A logger (set by set_filename)
@@ -36,12 +35,6 @@ class BaseFix(object):
                     # Lower numbers will be run first.
     _accept_type = None # [Advanced and not public] This tells RefactoringTool
                         # which node type to accept when there's not a pattern.
-
-    keep_line_order = False # For the bottom matcher: match with the
-                            # original line order
-    BM_compatible = False # Compatibility with the bottom matching
-                          # module; every fixer should set this
-                          # manually
 
     # Shortcut for access to Python grammar symbols
     syms = pygram.python_symbols
@@ -65,9 +58,7 @@ class BaseFix(object):
         self.{pattern,PATTERN} in .match().
         """
         if self.PATTERN is not None:
-            PC = PatternCompiler()
-            self.pattern, self.pattern_tree = PC.compile_pattern(self.PATTERN,
-                                                                 with_tree=True)
+            self.pattern = PatternCompiler().compile_pattern(self.PATTERN)
 
     def set_filename(self, filename):
         """Set the filename, and a logger derived from it.
@@ -105,14 +96,14 @@ class BaseFix(object):
         """
         raise NotImplementedError()
 
-    def new_name(self, template="xxx_todo_changeme"):
+    def new_name(self, template=u"xxx_todo_changeme"):
         """Return a string suitable for use as an identifier
 
         The new name is guaranteed not to conflict with other identifiers.
         """
         name = template
         while name in self.used_names:
-            name = template + str(next(self.numbers))
+            name = template + unicode(self.numbers.next())
         self.used_names.add(name)
         return name
 
@@ -131,7 +122,7 @@ class BaseFix(object):
         """
         lineno = node.get_lineno()
         for_output = node.clone()
-        for_output.prefix = ""
+        for_output.prefix = u""
         msg = "Line %d: could not convert: %s"
         self.log_message(msg % (lineno, for_output))
         if reason:

@@ -79,17 +79,11 @@ Some observations:
   for an example)
 
 To create a source distribution for this module, you would create a setup
-script, :file:`setup.py`, containing the above code, and run this command from a
-terminal::
+script, :file:`setup.py`, containing the above code, and run::
 
    python setup.py sdist
 
-For Windows, open a command prompt windows ("DOS box") and change the command
-to::
-
-   setup.py sdist
-
-:command:`sdist` will create an archive file (e.g., tarball on Unix, ZIP file on Windows)
+which will create an archive file (e.g., tarball on Unix, ZIP file on Windows)
 containing your setup script :file:`setup.py`, and your module :file:`foo.py`.
 The archive file will be named :file:`foo-1.0.tar.gz` (or :file:`.zip`), and
 will unpack into a directory :file:`foo-1.0`.
@@ -193,7 +187,7 @@ modules using the Distutils:
 module distribution
    a collection of Python modules distributed together as a single downloadable
    resource and meant to be installed *en masse*.  Examples of some well-known
-   module distributions are NumPy, SciPy, PIL (the Python Imaging
+   module distributions are Numeric Python, PyXML, PIL (the Python Imaging
    Library), or mxBase.  (This would be called a *package*, except that term is
    already taken in the Python context: a single module distribution may contain
    zero, one, or many Python packages.)

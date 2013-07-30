@@ -10,17 +10,14 @@ browser.
 Changes for Python: Add support for module versions
 """
 
+#__metaclass__ = type
+
 import os
-import sys
 import traceback
 
 import spark
 
-def output(string):
-    sys.stdout.write(string + "\n")
-
-
-class Token(object):
+class Token:
     # spark seems to dispatch in the parser based on a token's
     # type attribute
     def __init__(self, type, lineno):
@@ -48,7 +45,7 @@ class String(Token):
         self.value = value
         self.lineno = lineno
 
-class ASDLSyntaxError(Exception):
+class ASDLSyntaxError:
 
     def __init__(self, lineno, token=None, msg=None):
         self.lineno = lineno
@@ -101,7 +98,7 @@ class ASDLScanner(spark.GenericScanner, object):
 
     def t_default(self, s):
         r" . +"
-        raise ValueError("unmatched input: %r" % s)
+        raise ValueError, "unmatched input: %s" % `s`
 
 class ASDLParser(spark.GenericParser, object):
     def __init__(self):
@@ -113,54 +110,49 @@ class ASDLParser(spark.GenericParser, object):
     def error(self, tok):
         raise ASDLSyntaxError(tok.lineno, tok)
 
-    def p_module_0(self, info):
+    def p_module_0(self, (module, name, version, _0, _1)):
         " module ::= Id Id version { } "
-        module, name, version, _0, _1 = info
         if module.value != "module":
             raise ASDLSyntaxError(module.lineno,
                                   msg="expected 'module', found %s" % module)
         return Module(name, None, version)
 
-    def p_module(self, info):
+    def p_module(self, (module, name, version, _0, definitions, _1)):
         " module ::= Id Id version { definitions } "
-        module, name, version, _0, definitions, _1 = info
         if module.value != "module":
             raise ASDLSyntaxError(module.lineno,
                                   msg="expected 'module', found %s" % module)
         return Module(name, definitions, version)
 
-    def p_version(self, info):
+    def p_version(self, (version, V)):
         "version ::= Id String"
-        version, V = info
         if version.value != "version":
             raise ASDLSyntaxError(version.lineno,
-                                  msg="expected 'version', found %" % version)
+                                msg="expected 'version', found %" % version)
         return V
 
-    def p_definition_0(self, definition):
+    def p_definition_0(self, (definition,)):
         " definitions ::= definition "
-        return definition[0]
+        return definition
 
-    def p_definition_1(self, definitions):
+    def p_definition_1(self, (definitions, definition)):
         " definitions ::= definition definitions "
-        return definitions[0] + definitions[1]
+        return definitions + definition
 
-    def p_definition(self, info):
+    def p_definition(self, (id, _, type)):
         " definition ::= Id = type "
-        id, _, type = info
         return [Type(id, type)]
 
-    def p_type_0(self, product):
+    def p_type_0(self, (product,)):
         " type ::= product "
-        return product[0]
+        return product
 
-    def p_type_1(self, sum):
+    def p_type_1(self, (sum,)):
         " type ::= sum "
-        return Sum(sum[0])
+        return Sum(sum)
 
-    def p_type_2(self, info):
+    def p_type_2(self, (sum, id, _0, attributes, _1)):
         " type ::= sum Id ( fields ) "
-        sum, id, _0, attributes, _1 = info
         if id.value != "attributes":
             raise ASDLSyntaxError(id.lineno,
                                   msg="expected attributes, found %s" % id)
@@ -168,73 +160,65 @@ class ASDLParser(spark.GenericParser, object):
             attributes.reverse()
         return Sum(sum, attributes)
 
-    def p_product(self, info):
+    def p_product(self, (_0, fields, _1)):
         " product ::= ( fields ) "
-        _0, fields, _1 = info
         # XXX can't I just construct things in the right order?
         fields.reverse()
         return Product(fields)
 
-    def p_sum_0(self, constructor):
+    def p_sum_0(self, (constructor,)):
         " sum ::= constructor "
-        return [constructor[0]]
+        return [constructor]
 
-    def p_sum_1(self, info):
+    def p_sum_1(self, (constructor, _, sum)):
         " sum ::= constructor | sum "
-        constructor, _, sum = info
         return [constructor] + sum
 
-    def p_sum_2(self, info):
+    def p_sum_2(self, (constructor, _, sum)):
         " sum ::= constructor | sum "
-        constructor, _, sum = info
         return [constructor] + sum
 
-    def p_constructor_0(self, id):
+    def p_constructor_0(self, (id,)):
         " constructor ::= Id "
-        return Constructor(id[0])
+        return Constructor(id)
 
-    def p_constructor_1(self, info):
+    def p_constructor_1(self, (id, _0, fields, _1)):
         " constructor ::= Id ( fields ) "
-        id, _0, fields, _1 = info
         # XXX can't I just construct things in the right order?
         fields.reverse()
         return Constructor(id, fields)
 
-    def p_fields_0(self, field):
+    def p_fields_0(self, (field,)):
         " fields ::= field "
-        return [field[0]]
+        return [field]
 
-    def p_fields_1(self, info):
+    def p_fields_1(self, (field, _, fields)):
         " fields ::= field , fields "
-        field, _, fields = info
         return fields + [field]
 
-    def p_field_0(self, type_):
+    def p_field_0(self, (type,)):
         " field ::= Id "
-        return Field(type_[0])
+        return Field(type)
 
-    def p_field_1(self, info):
+    def p_field_1(self, (type, name)):
         " field ::= Id Id "
-        type, name = info
         return Field(type, name)
 
-    def p_field_2(self, info):
+    def p_field_2(self, (type, _, name)):
         " field ::= Id * Id "
-        type, _, name = info
-        return Field(type, name, seq=True)
+        return Field(type, name, seq=1)
 
-    def p_field_3(self, info):
+    def p_field_3(self, (type, _, name)):
         " field ::= Id ? Id "
-        type, _, name = info
-        return Field(type, name, opt=True)
+        return Field(type, name, opt=1)
 
-    def p_field_4(self, type_):
+    def p_field_4(self, (type, _)):
         " field ::= Id * "
-        return Field(type_[0], seq=True)
+        return Field(type, seq=1)
 
-    def p_field_5(self, type_):
+    def p_field_5(self, (type, _)):
         " field ::= Id ? "
-        return Field(type[0], opt=True)
+        return Field(type, opt=1)
 
 builtin_types = ("identifier", "string", "int", "bool", "object")
 
@@ -242,7 +226,7 @@ builtin_types = ("identifier", "string", "int", "bool", "object")
 # not sure if any of the methods are useful yet, but I'm adding them
 # piecemeal as they seem helpful
 
-class AST(object):
+class AST:
     pass # a marker class
 
 class Module(AST):
@@ -274,7 +258,7 @@ class Constructor(AST):
         return "Constructor(%s, %s)" % (self.name, self.fields)
 
 class Field(AST):
-    def __init__(self, type, name=None, seq=False, opt=False):
+    def __init__(self, type, name=None, seq=0, opt=0):
         self.type = type
         self.name = name
         self.seq = seq
@@ -282,9 +266,9 @@ class Field(AST):
 
     def __repr__(self):
         if self.seq:
-            extra = ", seq=True"
+            extra = ", seq=1"
         elif self.opt:
-            extra = ", opt=True"
+            extra = ", opt=1"
         else:
             extra = ""
         if self.name is None:
@@ -312,7 +296,7 @@ class Product(AST):
 
 class VisitorBase(object):
 
-    def __init__(self, skip=False):
+    def __init__(self, skip=0):
         self.cache = {}
         self.skip = skip
 
@@ -322,9 +306,9 @@ class VisitorBase(object):
             return
         try:
             meth(object, *args)
-        except Exception:
-            output("Error visiting" + repr(object))
-            output(str(sys.exc_info()[1]))
+        except Exception, err:
+            print "Error visiting", repr(object)
+            print err
             traceback.print_exc()
             # XXX hack
             if hasattr(self, 'file'):
@@ -347,7 +331,7 @@ class VisitorBase(object):
 class Check(VisitorBase):
 
     def __init__(self):
-        super(Check, self).__init__(skip=True)
+        super(Check, self).__init__(skip=1)
         self.cons = {}
         self.errors = 0
         self.types = {}
@@ -369,8 +353,8 @@ class Check(VisitorBase):
         if conflict is None:
             self.cons[key] = name
         else:
-            output("Redefinition of constructor %s" % key)
-            output("Defined in %s and %s" % (conflict, name))
+            print "Redefinition of constructor %s" % key
+            print "Defined in %s and %s" % (conflict, name)
             self.errors += 1
         for f in cons.fields:
             self.visit(f, key)
@@ -389,10 +373,10 @@ def check(mod):
     v.visit(mod)
 
     for t in v.types:
-        if t not in mod.types and not t in builtin_types:
+        if not mod.types.has_key(t) and not t in builtin_types:
             v.errors += 1
             uses = ", ".join(v.types[t])
-            output("Undefined type %s, used in %s" % (t, uses))
+            print "Undefined type %s, used in %s" % (t, uses)
 
     return not v.errors
 
@@ -404,11 +388,10 @@ def parse(file):
     tokens = scanner.tokenize(buf)
     try:
         return parser.parse(tokens)
-    except ASDLSyntaxError:
-        err = sys.exc_info()[1]
-        output(str(err))
+    except ASDLSyntaxError, err:
+        print err
         lines = buf.split("\n")
-        output(lines[err.lineno - 1]) # lines starts at 0, files at 1
+        print lines[err.lineno - 1] # lines starts at 0, files at 1
 
 if __name__ == "__main__":
     import glob
@@ -421,14 +404,12 @@ if __name__ == "__main__":
         files = glob.glob(testdir + "/*.asdl")
 
     for file in files:
-        output(file)
+        print file
         mod = parse(file)
-        if not mod:
-            break
-        output("module", mod.name)
-        output(len(mod.dfns), "definitions")
+        print "module", mod.name
+        print len(mod.dfns), "definitions"
         if not check(mod):
-            output("Check failed")
+            print "Check failed"
         else:
             for dfn in mod.dfns:
-                output(dfn.type)
+                print dfn.type

@@ -22,12 +22,12 @@ import re
 import string
 import tabnanny
 import tokenize
-import tkinter.messagebox as tkMessageBox
-from idlelib.EditorWindow import EditorWindow
-from idlelib import PyShell, IOBinding
+import tkMessageBox
+from idlelib import PyShell
 
 from idlelib.configHandler import idleConf
-from idlelib import macosxSupport
+
+IDENTCHARS = string.ascii_letters + string.digits + "_"
 
 indent_message = """Error: Inconsistent indentation detected!
 
@@ -53,9 +53,6 @@ class ScriptBinding:
         self.flist = self.editwin.flist
         self.root = self.editwin.root
 
-        if macosxSupport.runningAsOSXApp():
-            self.editwin.text_frame.bind('<<run-module-event-2>>', self._run_module_event)
-
     def check_module_event(self, event):
         filename = self.getfilename()
         if not filename:
@@ -66,22 +63,16 @@ class ScriptBinding:
             return 'break'
 
     def tabnanny(self, filename):
-        # XXX: tabnanny should work on binary files as well
-        with open(filename, 'r', encoding='iso-8859-1') as f:
-            two_lines = f.readline() + f.readline()
-        encoding = IOBinding.coding_spec(two_lines)
-        if not encoding:
-            encoding = 'utf-8'
-        f = open(filename, 'r', encoding=encoding)
+        f = open(filename, 'r')
         try:
             tabnanny.process_tokens(tokenize.generate_tokens(f.readline))
-        except tokenize.TokenError as msg:
+        except tokenize.TokenError, msg:
             msgtxt, (lineno, start) = msg
             self.editwin.gotoline(lineno)
             self.errorbox("Tabnanny Tokenizing Error",
                           "Token Error: %s" % msgtxt)
             return False
-        except tabnanny.NannyNag as nag:
+        except tabnanny.NannyNag, nag:
             # The error messages from tabnanny are too confusing...
             self.editwin.gotoline(nag.get_lineno())
             self.errorbox("Tab/space error", indent_message)
@@ -92,55 +83,57 @@ class ScriptBinding:
         self.shell = shell = self.flist.open_shell()
         saved_stream = shell.get_warning_stream()
         shell.set_warning_stream(shell.stderr)
-        f = open(filename, 'rb')
+        f = open(filename, 'r')
         source = f.read()
         f.close()
-        if b'\r' in source:
-            source = source.replace(b'\r\n', b'\n')
-            source = source.replace(b'\r', b'\n')
-        if source and source[-1] != ord(b'\n'):
-            source = source + b'\n'
-        editwin = self.editwin
-        text = editwin.text
+        if '\r' in source:
+            source = re.sub(r"\r\n", "\n", source)
+            source = re.sub(r"\r", "\n", source)
+        if source and source[-1] != '\n':
+            source = source + '\n'
+        text = self.editwin.text
         text.tag_remove("ERROR", "1.0", "end")
         try:
-            # If successful, return the compiled code
-            return compile(source, filename, "exec")
-        except (SyntaxError, OverflowError) as value:
-            msg = value.msg or "<no detail available>"
-            lineno = value.lineno or 1
-            offset = value.offset or 0
-            if offset == 0:
-                lineno += 1  #mark end of offending line
-            pos = "0.0 + %d lines + %d chars" % (lineno-1, offset-1)
-            editwin.colorize_syntax_error(text, pos)
-            self.errorbox("SyntaxError", "%-20s" % msg)
-            return False
+            try:
+                # If successful, return the compiled code
+                return compile(source, filename, "exec")
+            except (SyntaxError, OverflowError), err:
+                try:
+                    msg, (errorfilename, lineno, offset, line) = err
+                    if not errorfilename:
+                        err.args = msg, (filename, lineno, offset, line)
+                        err.filename = filename
+                    self.colorize_syntax_error(msg, lineno, offset)
+                except:
+                    msg = "*** " + str(err)
+                self.errorbox("Syntax error",
+                              "There's an error in your program:\n" + msg)
+                return False
         finally:
             shell.set_warning_stream(saved_stream)
 
-    def run_module_event(self, event):
-        if macosxSupport.runningAsOSXApp():
-            # Tk-Cocoa in MacOSX is broken until at least
-            # Tk 8.5.9, and without this rather
-            # crude workaround IDLE would hang when a user
-            # tries to run a module using the keyboard shortcut
-            # (the menu item works fine).
-            self.editwin.text_frame.after(200,
-                lambda: self.editwin.text_frame.event_generate('<<run-module-event-2>>'))
-            return 'break'
+    def colorize_syntax_error(self, msg, lineno, offset):
+        text = self.editwin.text
+        pos = "0.0 + %d lines + %d chars" % (lineno-1, offset-1)
+        text.tag_add("ERROR", pos)
+        char = text.get(pos)
+        if char and char in IDENTCHARS:
+            text.tag_add("ERROR", pos + " wordstart", pos)
+        if '\n' == text.get(pos):   # error at line end
+            text.mark_set("insert", pos)
         else:
-            return self._run_module_event(event)
+            text.mark_set("insert", pos + "+1c")
+        text.see(pos)
 
-    def _run_module_event(self, event):
+    def run_module_event(self, event):
         """Run the module after setting up the environment.
 
         First check the syntax.  If OK, make sure the shell is active and
         then transfer the arguments, set the run environment's working
         directory to the directory of the module being executed and also
         add that directory to its sys.path if not already included.
-        """
 
+        """
         filename = self.getfilename()
         if not filename:
             return 'break'
@@ -191,9 +184,9 @@ class ScriptBinding:
             if autosave and filename:
                 self.editwin.io.save(None)
             else:
-                confirm = self.ask_save_dialog()
+                reply = self.ask_save_dialog()
                 self.editwin.text.focus_set()
-                if confirm:
+                if reply == "ok":
                     self.editwin.io.save(None)
                     filename = self.editwin.io.filename
                 else:
@@ -202,11 +195,13 @@ class ScriptBinding:
 
     def ask_save_dialog(self):
         msg = "Source Must Be Saved\n" + 5*' ' + "OK to Save?"
-        confirm = tkMessageBox.askokcancel(title="Save Before Run or Check",
-                                           message=msg,
-                                           default=tkMessageBox.OK,
-                                           master=self.editwin.text)
-        return confirm
+        mb = tkMessageBox.Message(title="Save Before Run or Check",
+                                  message=msg,
+                                  icon=tkMessageBox.QUESTION,
+                                  type=tkMessageBox.OKCANCEL,
+                                  default=tkMessageBox.OK,
+                                  master=self.editwin.text)
+        return mb.show()
 
     def errorbox(self, title, message):
         # XXX This should really be a function of EditorWindow...

@@ -8,12 +8,6 @@
 
 #include "multiprocessing.h"
 
-#ifdef SCM_RIGHTS
-    #define HAVE_FD_TRANSFER 1
-#else
-    #define HAVE_FD_TRANSFER 0
-#endif
-
 PyObject *create_win32_namespace(void);
 
 PyObject *pickle_dumps, *pickle_loads, *pickle_protocol;
@@ -122,7 +116,7 @@ multiprocessing_sendfd(PyObject *self, PyObject *args)
     cmsg->cmsg_type = SCM_RIGHTS;
     cmsg->cmsg_len = CMSG_LEN(sizeof(int));
     msg.msg_controllen = cmsg->cmsg_len;
-    *CMSG_DATA(cmsg) = fd;
+    *(int*)CMSG_DATA(cmsg) = fd;
 
     Py_BEGIN_ALLOW_THREADS
     res = sendmsg(conn, &msg, 0);
@@ -165,7 +159,7 @@ multiprocessing_recvfd(PyObject *self, PyObject *args)
     if (res < 0)
         return PyErr_SetFromErrno(PyExc_OSError);
 
-    fd = *CMSG_DATA(cmsg);
+    fd = *(int*)CMSG_DATA(cmsg);
     return Py_BuildValue("i", fd);
 }
 
@@ -218,33 +212,20 @@ static PyMethodDef module_methods[] = {
  * Initialize
  */
 
-static struct PyModuleDef multiprocessing_module = {
-    PyModuleDef_HEAD_INIT,
-    "_multiprocessing",
-    NULL,
-    -1,
-    module_methods,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
-
 PyMODINIT_FUNC
-PyInit__multiprocessing(void)
+init_multiprocessing(void)
 {
     PyObject *module, *temp, *value;
 
     /* Initialize module */
-    module = PyModule_Create(&multiprocessing_module);
+    module = Py_InitModule("_multiprocessing", module_methods);
     if (!module)
-        return NULL;
+        return;
 
     /* Get copy of objects from pickle */
     temp = PyImport_ImportModule(PICKLE_MODULE);
     if (!temp)
-        return NULL;
+        return;
     pickle_dumps = PyObject_GetAttrString(temp, "dumps");
     pickle_loads = PyObject_GetAttrString(temp, "loads");
     pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
@@ -253,42 +234,30 @@ PyInit__multiprocessing(void)
     /* Get copy of BufferTooShort */
     temp = PyImport_ImportModule("multiprocessing");
     if (!temp)
-        return NULL;
+        return;
     BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
     Py_XDECREF(temp);
 
     /* Add connection type to module */
     if (PyType_Ready(&ConnectionType) < 0)
-        return NULL;
+        return;
     Py_INCREF(&ConnectionType);
     PyModule_AddObject(module, "Connection", (PyObject*)&ConnectionType);
 
-#if defined(MS_WINDOWS) ||                                              \
-  (defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED))
+#if defined(MS_WINDOWS) || HAVE_SEM_OPEN
     /* Add SemLock type to module */
     if (PyType_Ready(&SemLockType) < 0)
-        return NULL;
+        return;
     Py_INCREF(&SemLockType);
-    {
-        PyObject *py_sem_value_max;
-        /* Some systems define SEM_VALUE_MAX as an unsigned value that
-         * causes it to be negative when used as an int (NetBSD). */
-        if ((int)(SEM_VALUE_MAX) < 0)
-            py_sem_value_max = PyLong_FromLong(INT_MAX);
-        else
-            py_sem_value_max = PyLong_FromLong(SEM_VALUE_MAX);
-        if (py_sem_value_max == NULL)
-            return NULL;
-        PyDict_SetItemString(SemLockType.tp_dict, "SEM_VALUE_MAX",
-                             py_sem_value_max);
-    }
+    PyDict_SetItemString(SemLockType.tp_dict, "SEM_VALUE_MAX",
+                         Py_BuildValue("i", SEM_VALUE_MAX));
     PyModule_AddObject(module, "SemLock", (PyObject*)&SemLockType);
 #endif
 
 #ifdef MS_WINDOWS
     /* Add PipeConnection to module */
     if (PyType_Ready(&PipeConnectionType) < 0)
-        return NULL;
+        return;
     Py_INCREF(&PipeConnectionType);
     PyModule_AddObject(module, "PipeConnection",
                        (PyObject*)&PipeConnectionType);
@@ -296,34 +265,33 @@ PyInit__multiprocessing(void)
     /* Initialize win32 class and add to multiprocessing */
     temp = create_win32_namespace();
     if (!temp)
-        return NULL;
+        return;
     PyModule_AddObject(module, "win32", temp);
 
     /* Initialize the event handle used to signal Ctrl-C */
     sigint_event = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (!sigint_event) {
         PyErr_SetFromWindowsErr(0);
-        return NULL;
+        return;
     }
     if (!SetConsoleCtrlHandler(ProcessingCtrlHandler, TRUE)) {
         PyErr_SetFromWindowsErr(0);
-        return NULL;
+        return;
     }
 #endif
 
     /* Add configuration macros */
     temp = PyDict_New();
     if (!temp)
-        return NULL;
-
+        return;
 #define ADD_FLAG(name)                                            \
     value = Py_BuildValue("i", name);                             \
-    if (value == NULL) { Py_DECREF(temp); return NULL; }          \
+    if (value == NULL) { Py_DECREF(temp); return; }               \
     if (PyDict_SetItemString(temp, #name, value) < 0) {           \
-        Py_DECREF(temp); Py_DECREF(value); return NULL; }                 \
+        Py_DECREF(temp); Py_DECREF(value); return; }              \
     Py_DECREF(value)
 
-#if defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED)
+#ifdef HAVE_SEM_OPEN
     ADD_FLAG(HAVE_SEM_OPEN);
 #endif
 #ifdef HAVE_SEM_TIMEDWAIT
@@ -338,9 +306,6 @@ PyInit__multiprocessing(void)
 #ifdef HAVE_BROKEN_SEM_UNLINK
     ADD_FLAG(HAVE_BROKEN_SEM_UNLINK);
 #endif
-
     if (PyModule_AddObject(module, "flags", temp) < 0)
-        return NULL;
-
-    return module;
+        return;
 }

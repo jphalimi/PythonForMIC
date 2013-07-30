@@ -197,11 +197,11 @@ semlock_release(SemLockObject *self, PyObject *args)
 #define SEM_GETVALUE(sem, pval) sem_getvalue(sem, pval)
 #define SEM_UNLINK(name) sem_unlink(name)
 
-#ifndef HAVE_SEM_UNLINK
+#if HAVE_BROKEN_SEM_UNLINK
 #  define sem_unlink(name) 0
 #endif
 
-#ifndef HAVE_SEM_TIMEDWAIT
+#if !HAVE_SEM_TIMEDWAIT
 #  define sem_timedwait(sem,deadline) sem_timedwait_save(sem,deadline,_save)
 
 int
@@ -348,7 +348,7 @@ semlock_release(SemLockObject *self, PyObject *args)
         }
         assert(self->count == 1);
     } else {
-#ifdef HAVE_BROKEN_SEM_GETVALUE
+#if HAVE_BROKEN_SEM_GETVALUE
         /* We will only check properly the maxvalue == 1 case */
         if (self->maxvalue == 1) {
             /* make sure that already locked */
@@ -433,7 +433,7 @@ semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    PyOS_snprintf(buffer, sizeof(buffer), "/mp%ld-%d", (long)getpid(), counter++);
+    PyOS_snprintf(buffer, sizeof(buffer), "/mp%d-%d", getpid(), counter++);
 
     SEM_CLEAR_ERROR();
     handle = SEM_CREATE(buffer, value, maxvalue);
@@ -494,7 +494,7 @@ semlock_ismine(SemLockObject *self)
 static PyObject *
 semlock_getvalue(SemLockObject *self)
 {
-#ifdef HAVE_BROKEN_SEM_GETVALUE
+#if HAVE_BROKEN_SEM_GETVALUE
     PyErr_SetNone(PyExc_NotImplementedError);
     return NULL;
 #else
@@ -512,7 +512,7 @@ semlock_getvalue(SemLockObject *self)
 static PyObject *
 semlock_iszero(SemLockObject *self)
 {
-#ifdef HAVE_BROKEN_SEM_GETVALUE
+#if HAVE_BROKEN_SEM_GETVALUE
     if (sem_trywait(self->handle) < 0) {
         if (errno == EAGAIN)
             Py_RETURN_TRUE;
@@ -592,7 +592,7 @@ PyTypeObject SemLockType = {
     /* tp_print          */ 0,
     /* tp_getattr        */ 0,
     /* tp_setattr        */ 0,
-    /* tp_reserved       */ 0,
+    /* tp_compare        */ 0,
     /* tp_repr           */ 0,
     /* tp_as_number      */ 0,
     /* tp_as_sequence    */ 0,

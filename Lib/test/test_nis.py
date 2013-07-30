@@ -1,20 +1,16 @@
-from test import support
+from test import test_support
 import unittest
-import sys
-
-# Skip test if nis module does not exist.
-nis = support.import_module('nis')
-
+import nis
 
 class NisTests(unittest.TestCase):
     def test_maps(self):
         try:
             maps = nis.maps()
-        except nis.error as msg:
+        except nis.error, msg:
             # NIS is probably not active, so this test isn't useful
-            if support.verbose:
-                print("Test Skipped:", msg)
-            # Can't raise SkipTest as regrtest only recognizes the exception
+            if test_support.verbose:
+                print "Test Skipped:", msg
+            # Can't raise TestSkipped as regrtest only recognizes the exception
             #   import time.
             return
         try:
@@ -41,7 +37,7 @@ class NisTests(unittest.TestCase):
                 break
 
 def test_main():
-    support.run_unittest(NisTests)
+    test_support.run_unittest(NisTests)
 
 if __name__ == '__main__':
     test_main()

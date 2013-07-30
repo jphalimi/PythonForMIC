@@ -107,3 +107,4 @@ stringlib_swapcase(PyObject *self)
                     STRINGLIB_LEN(self));
     return newobj;
 }
+

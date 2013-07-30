@@ -11,9 +11,9 @@ import sys
 here = os.path.abspath(os.path.dirname(__file__))
 par = os.path.pardir
 
-TCL = "tcl8.5.9"
-TK = "tk8.5.9"
-TIX = "tix-8.4.3.x"
+TCL = "tcl8.5.2"
+TK = "tk8.5.2"
+TIX = "tix-8.4.0.x"
 
 ROOT = os.path.abspath(os.path.join(here, par, par))
 # Windows 2000 compatibility: WINVER 0x0500
@@ -23,7 +23,7 @@ NMAKE = ('nmake /nologo /f %s '
     '%s %s')
 
 def nmake(makefile, command="", **kw):
-    defines = ' '.join(k+'='+str(v) for k, v in kw.items())
+    defines = ' '.join(k+'='+v for k, v in kw.items())
     cmd = NMAKE % (makefile, defines, command)
     print("\n\n"+cmd+"\n")
     if os.system(cmd) != 0:
@@ -52,18 +52,18 @@ def build(platform, clean):
     if 1:
         os.chdir(os.path.join(ROOT, TK, "win"))
         if clean:
-            nmake("makefile.vc", "clean", DEBUG=0, TCLDIR=tcldir)
-        nmake("makefile.vc", DEBUG=0, MACHINE=machine, TCLDIR=tcldir)
-        nmake("makefile.vc", "install", DEBUG=0, INSTALLDIR=dest, MACHINE=machine, TCLDIR=tcldir)
+            nmake("makefile.vc", "clean", TCLDIR=tcldir)
+        nmake("makefile.vc", TCLDIR=tcldir, MACHINE=machine)
+        nmake("makefile.vc", "install", TCLDIR=tcldir, INSTALLDIR=dest, MACHINE=machine)
 
     # TIX
     if 1:
         # python9.mak is available at http://svn.python.org
         os.chdir(os.path.join(ROOT, TIX, "win"))
         if clean:
-            nmake("python.mak", "clean")
-        nmake("python.mak", MACHINE=machine, INSTALL_DIR=dest)
-        nmake("python.mak", "install", MACHINE=machine, INSTALL_DIR=dest)
+            nmake("python9.mak", "clean")
+        nmake("python9.mak", MACHINE=machine, INSTALL_DIR=dest)
+        nmake("python9.mak", "install", INSTALL_DIR=dest)
 
 def main():
     if len(sys.argv) < 2 or sys.argv[1] not in ("Win32", "AMD64"):

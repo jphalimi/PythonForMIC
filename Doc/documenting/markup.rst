@@ -53,9 +53,9 @@ As you can see, the module-specific markup consists of two directives, the
 
 .. describe:: module
 
-   This directive marks the beginning of the description of a module, package,
-   or submodule. The name should be fully qualified (i.e. including the
-   package name for submodules).
+   This directive marks the beginning of the description of a module (or package
+   submodule, in which case the name should be fully qualified, including the
+   package name).
 
    The ``platform`` option, if present, is a comma-separated list of the
    platforms on which the module is available (if it is available on all
@@ -98,21 +98,20 @@ following example shows all of the features of this directive type::
 
        Spam or ham the foo.
 
-The signatures of object methods or data attributes should not include the
-class name, but be nested in a class directive.  The generated files will
-reflect this nesting, and the target identifiers (for HTML output) will use
-both the class and method name, to enable consistent cross-references.  If you
-describe methods belonging to an abstract protocol such as context managers,
-use a class directive with a (pseudo-)type name too to make the
+The signatures of object methods or data attributes should always include the
+type name (``.. method:: FileInput.input(...)``), even if it is obvious from the
+context which type they belong to; this is to enable consistent
+cross-references.  If you describe methods belonging to an abstract protocol,
+such as "context managers", include a (pseudo-)type name too to make the
 index entries more informative.
 
 The directives are:
 
-.. describe:: c:function
+.. describe:: cfunction
 
    Describes a C function. The signature should be given as in C, e.g.::
 
-      .. c:function:: PyObject* PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
+      .. cfunction:: PyObject* PyType_GenericAlloc(PyTypeObject *type, Py_ssize_t nitems)
 
    This is also used to describe function-like preprocessor macros.  The names
    of the arguments should be given so they may be used in the description.
@@ -120,29 +119,29 @@ The directives are:
    Note that you don't have to backslash-escape asterisks in the signature,
    as it is not parsed by the reST inliner.
 
-.. describe:: c:member
+.. describe:: cmember
 
    Describes a C struct member. Example signature::
 
-      .. c:member:: PyObject* PyTypeObject.tp_bases
+      .. cmember:: PyObject* PyTypeObject.tp_bases
 
    The text of the description should include the range of values allowed, how
    the value should be interpreted, and whether the value can be changed.
    References to structure members in text should use the ``member`` role.
 
-.. describe:: c:macro
+.. describe:: cmacro
 
    Describes a "simple" C macro.  Simple macros are macros which are used
    for code expansion, but which do not take arguments so cannot be described as
    functions.  This is not to be used for simple constant definitions.  Examples
-   of its use in the Python documentation include :c:macro:`PyObject_HEAD` and
-   :c:macro:`Py_BEGIN_ALLOW_THREADS`.
+   of its use in the Python documentation include :cmacro:`PyObject_HEAD` and
+   :cmacro:`Py_BEGIN_ALLOW_THREADS`.
 
-.. describe:: c:type
+.. describe:: ctype
 
    Describes a C type. The signature should just be the type name.
 
-.. describe:: c:var
+.. describe:: cvar
 
    Describes a global C variable.  The signature should include the type, such
    as::
@@ -153,7 +152,7 @@ The directives are:
 
    Describes global data in a module, including both variables and values used
    as "defined constants."  Class and object attributes are not documented
-   using this directive.
+   using this environment.
 
 .. describe:: exception
 
@@ -166,7 +165,7 @@ The directives are:
    parameters, enclosing optional parameters in brackets.  Default values can be
    given if it enhances clarity.  For example::
 
-      .. function:: repeat([repeat=3[, number=1000000]])
+      .. function:: Timer.repeat([repeat=3[, number=1000000]])
 
    Object methods are not documented using this directive. Bound object methods
    placed in the module namespace as part of the public interface of the module
@@ -178,37 +177,6 @@ The directives are:
    are modified), side effects, and possible exceptions.  A small example may be
    provided.
 
-.. describe:: decorator
-
-   Describes a decorator function.  The signature should *not* represent the
-   signature of the actual function, but the usage as a decorator.  For example,
-   given the functions
-
-   .. code-block:: python
-
-      def removename(func):
-          func.__name__ = ''
-          return func
-
-      def setnewname(name):
-          def decorator(func):
-              func.__name__ = name
-              return func
-          return decorator
-
-   the descriptions should look like this::
-
-      .. decorator:: removename
-
-         Remove name of the decorated function.
-
-      .. decorator:: setnewname(name)
-
-         Set name of the decorated function to *name*.
-
-   There is no ``deco`` role to link to a decorator that is marked up with
-   this directive; rather, use the ``:func:`` role.
-
 .. describe:: class
 
    Describes a class.  The signature can include parentheses with parameters
@@ -218,36 +186,13 @@ The directives are:
 
    Describes an object data attribute.  The description should include
    information about the type of the data to be expected and whether it may be
-   changed directly.  This directive should be nested in a class directive,
-   like in this example::
-
-      .. class:: Spam
-
-            Description of the class.
-
-            .. data:: ham
-
-               Description of the attribute.
-
-   If is also possible to document an attribute outside of a class directive,
-   for example if the documentation for different attributes and methods is
-   split in multiple sections.  The class name should then be included
-   explicitly::
-
-      .. data:: Spam.eggs
+   changed directly.
 
 .. describe:: method
 
    Describes an object method.  The parameters should not include the ``self``
    parameter.  The description should include similar information to that
-   described for ``function``.  This directive should be nested in a class
-   directive, like in the example above.
-
-.. describe:: decoratormethod
-
-   Same as ``decorator``, but for decorators that are methods.
-
-   Refer to a decorator method using the ``:meth:`` role.
+   described for ``function``.
 
 .. describe:: opcode
 
@@ -421,25 +366,21 @@ the currently documented class.
 The following roles create cross-references to C-language constructs if they
 are defined in the API documentation:
 
-.. describe:: c:data
+.. describe:: cdata
 
    The name of a C-language variable.
 
-.. describe:: c:func
+.. describe:: cfunc
 
    The name of a C-language function. Should include trailing parentheses.
 
-.. describe:: c:macro
+.. describe:: cmacro
 
    The name of a "simple" C macro, as defined above.
 
-.. describe:: c:type
+.. describe:: ctype
 
    The name of a C-language type.
-
-.. describe:: c:member
-
-   The name of a C type member, as defined above.
 
 
 The following role does possibly create a cross-reference, but does not refer
@@ -583,6 +524,10 @@ in a different style:
    If you don't need the "variable part" indication, use the standard
    ````code```` instead.
 
+.. describe:: var
+
+   A Python or C variable or parameter name.
+
 
 The following roles generate external links:
 
@@ -628,8 +573,6 @@ Example::
 
 The ``:ref:`` invocation is replaced with the section title.
 
-Alternatively, you can reference any label (not just section titles)
-if you provide the link text ``:ref:`link text <reference-label>```.
 
 Paragraph-level markup
 ----------------------
@@ -671,7 +614,7 @@ units as well as normal text:
 
    Example::
 
-      .. versionadded:: 3.1
+      .. versionadded:: 2.5
          The *spam* parameter.
 
    Note that there must be no blank line between the directive head and the
@@ -756,10 +699,10 @@ tables of contents.  The ``toctree`` directive is the central element.
       .. toctree::
          :maxdepth: 2
 
-         intro
-         strings
-         datatypes
-         numeric
+         intro.rst
+         strings.rst
+         datatypes.rst
+         numeric.rst
          (many more files listed here)
 
    This accomplishes two things:
@@ -767,8 +710,8 @@ tables of contents.  The ``toctree`` directive is the central element.
    * Tables of contents from all those files are inserted, with a maximum depth
      of two, that means one nested heading.  ``toctree`` directives in those
      files are also taken into account.
-   * Sphinx knows that the relative order of the files ``intro``,
-     ``strings`` and so forth, and it knows that they are children of the
+   * Sphinx knows that the relative order of the files ``intro.rst``,
+     ``strings.rst`` and so forth, and it knows that they are children of the
      shown file, the library index.  From this information it generates "next
      chapter", "previous chapter" and "parent chapter" links.
 

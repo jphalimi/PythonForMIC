@@ -5,9 +5,9 @@ class TwoNames:
 
     def f(self):
         '''
-        >>> print(TwoNames().f())
+        >>> print TwoNames().f()
         f
         '''
         return 'f'
 
-    g = f # define an alias for f
+        g = f # define an alias for f

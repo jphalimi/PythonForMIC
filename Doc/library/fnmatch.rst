@@ -1,3 +1,4 @@
+
 :mod:`fnmatch` --- Unix filename pattern matching
 =================================================
 
@@ -8,10 +9,6 @@
 .. index:: single: filenames; wildcard expansion
 
 .. index:: module: re
-
-**Source code:** :source:`Lib/fnmatch.py`
-
---------------
 
 This module provides support for Unix shell-style wildcards, which are *not* the
 same as regular expressions (which are documented in the :mod:`re` module).  The
@@ -55,7 +52,7 @@ patterns.
 
       for file in os.listdir('.'):
           if fnmatch.fnmatch(file, '*.txt'):
-              print(file)
+              print file
 
 
 .. function:: fnmatchcase(filename, pattern)
@@ -69,12 +66,12 @@ patterns.
    Return the subset of the list of *names* that match *pattern*. It is the same as
    ``[n for n in names if fnmatch(n, pattern)]``, but implemented more efficiently.
 
+   .. versionadded:: 2.2
+
 
 .. function:: translate(pattern)
 
    Return the shell-style *pattern* converted to a regular expression.
-
-   Be aware there is no way to quote meta-characters.
 
    Example:
 
@@ -92,3 +89,4 @@ patterns.
 
    Module :mod:`glob`
       Unix shell-style path expansion.
+

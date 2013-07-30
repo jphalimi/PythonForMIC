@@ -2,16 +2,12 @@
 ======================================================
 
 .. module:: tabnanny
-   :synopsis: Tool for detecting white space related problems in Python
-              source files in a directory tree.
+   :synopsis: Tool for detecting white space related problems in Python source files in a
+              directory tree.
 .. moduleauthor:: Tim Peters <tim_one@users.sourceforge.net>
 .. sectionauthor:: Peter Funk <pf@artcom-gmbh.de>
 
 .. rudimentary documentation based on module comments
-
-**Source code:** :source:`Lib/tabnanny.py`
-
---------------
 
 For the time being this module is intended to be called as a script. However it
 is possible to import it into an IDE and use the function :func:`check`
@@ -27,9 +23,9 @@ described below.
 
    If *file_or_dir* is a directory and not a symbolic link, then recursively
    descend the directory tree named by *file_or_dir*, checking all :file:`.py`
-   files along the way.  If *file_or_dir* is an ordinary Python source file, it
-   is checked for whitespace related problems.  The diagnostic messages are
-   written to standard output using the :func:`print` function.
+   files along the way.  If *file_or_dir* is an ordinary Python source file, it is
+   checked for whitespace related problems.  The diagnostic messages are written to
+   standard output using the print statement.
 
 
 .. data:: verbose

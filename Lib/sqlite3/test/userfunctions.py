@@ -28,7 +28,7 @@ import sqlite3 as sqlite
 def func_returntext():
     return "foo"
 def func_returnunicode():
-    return "bar"
+    return u"bar"
 def func_returnint():
     return 42
 def func_returnfloat():
@@ -36,12 +36,12 @@ def func_returnfloat():
 def func_returnnull():
     return None
 def func_returnblob():
-    return b"blob"
+    return buffer("blob")
 def func_raiseexception():
-    5/0
+    5 // 0
 
 def func_isstring(v):
-    return type(v) is str
+    return type(v) is unicode
 def func_isint(v):
     return type(v) is int
 def func_isfloat(v):
@@ -49,7 +49,7 @@ def func_isfloat(v):
 def func_isnone(v):
     return type(v) is type(None)
 def func_isblob(v):
-    return isinstance(v, (bytes, memoryview))
+    return type(v) is buffer
 
 class AggrNoStep:
     def __init__(self):
@@ -67,7 +67,7 @@ class AggrNoFinalize:
 
 class AggrExceptionInInit:
     def __init__(self):
-        5/0
+        5 // 0
 
     def step(self, x):
         pass
@@ -80,7 +80,7 @@ class AggrExceptionInStep:
         pass
 
     def step(self, x):
-        5/0
+        5 // 0
 
     def finalize(self):
         return 42
@@ -93,15 +93,14 @@ class AggrExceptionInFinalize:
         pass
 
     def finalize(self):
-        5/0
+        5 // 0
 
 class AggrCheckType:
     def __init__(self):
         self.val = None
 
     def step(self, whichType, val):
-        theType = {"str": str, "int": int, "float": float, "None": type(None),
-                   "blob": bytes}
+        theType = {"str": unicode, "int": int, "float": float, "None": type(None), "blob": buffer}
         self.val = int(theType[whichType] is type(val))
 
     def finalize(self):
@@ -161,28 +160,28 @@ class FunctionTests(unittest.TestCase):
         cur = self.con.cursor()
         cur.execute("select returntext()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), str)
-        self.assertEqual(val, "foo")
+        self.failUnlessEqual(type(val), unicode)
+        self.failUnlessEqual(val, "foo")
 
     def CheckFuncReturnUnicode(self):
         cur = self.con.cursor()
         cur.execute("select returnunicode()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), str)
-        self.assertEqual(val, "bar")
+        self.failUnlessEqual(type(val), unicode)
+        self.failUnlessEqual(val, u"bar")
 
     def CheckFuncReturnInt(self):
         cur = self.con.cursor()
         cur.execute("select returnint()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), int)
-        self.assertEqual(val, 42)
+        self.failUnlessEqual(type(val), int)
+        self.failUnlessEqual(val, 42)
 
     def CheckFuncReturnFloat(self):
         cur = self.con.cursor()
         cur.execute("select returnfloat()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), float)
+        self.failUnlessEqual(type(val), float)
         if val < 3.139 or val > 3.141:
             self.fail("wrong value")
 
@@ -190,15 +189,15 @@ class FunctionTests(unittest.TestCase):
         cur = self.con.cursor()
         cur.execute("select returnnull()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), type(None))
-        self.assertEqual(val, None)
+        self.failUnlessEqual(type(val), type(None))
+        self.failUnlessEqual(val, None)
 
     def CheckFuncReturnBlob(self):
         cur = self.con.cursor()
         cur.execute("select returnblob()")
         val = cur.fetchone()[0]
-        self.assertEqual(type(val), bytes)
-        self.assertEqual(val, b"blob")
+        self.failUnlessEqual(type(val), buffer)
+        self.failUnlessEqual(val, buffer("blob"))
 
     def CheckFuncException(self):
         cur = self.con.cursor()
@@ -206,38 +205,38 @@ class FunctionTests(unittest.TestCase):
             cur.execute("select raiseexception()")
             cur.fetchone()
             self.fail("should have raised OperationalError")
-        except sqlite.OperationalError as e:
-            self.assertEqual(e.args[0], 'user-defined function raised exception')
+        except sqlite.OperationalError, e:
+            self.failUnlessEqual(e.args[0], 'user-defined function raised exception')
 
     def CheckParamString(self):
         cur = self.con.cursor()
         cur.execute("select isstring(?)", ("foo",))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckParamInt(self):
         cur = self.con.cursor()
         cur.execute("select isint(?)", (42,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckParamFloat(self):
         cur = self.con.cursor()
         cur.execute("select isfloat(?)", (3.14,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckParamNone(self):
         cur = self.con.cursor()
         cur.execute("select isnone(?)", (None,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckParamBlob(self):
         cur = self.con.cursor()
-        cur.execute("select isblob(?)", (memoryview(b"blob"),))
+        cur.execute("select isblob(?)", (buffer("blob"),))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
 class AggregateTests(unittest.TestCase):
     def setUp(self):
@@ -253,7 +252,7 @@ class AggregateTests(unittest.TestCase):
                 )
             """)
         cur.execute("insert into test(t, i, f, n, b) values (?, ?, ?, ?, ?)",
-            ("foo", 5, 3.14, None, memoryview(b"blob"),))
+            ("foo", 5, 3.14, None, buffer("blob"),))
 
         self.con.create_aggregate("nostep", 1, AggrNoStep)
         self.con.create_aggregate("nofinalize", 1, AggrNoFinalize)
@@ -280,8 +279,8 @@ class AggregateTests(unittest.TestCase):
         try:
             cur.execute("select nostep(t) from test")
             self.fail("should have raised an AttributeError")
-        except AttributeError as e:
-            self.assertEqual(e.args[0], "'AggrNoStep' object has no attribute 'step'")
+        except AttributeError, e:
+            self.failUnlessEqual(e.args[0], "AggrNoStep instance has no attribute 'step'")
 
     def CheckAggrNoFinalize(self):
         cur = self.con.cursor()
@@ -289,8 +288,8 @@ class AggregateTests(unittest.TestCase):
             cur.execute("select nofinalize(t) from test")
             val = cur.fetchone()[0]
             self.fail("should have raised an OperationalError")
-        except sqlite.OperationalError as e:
-            self.assertEqual(e.args[0], "user-defined aggregate's 'finalize' method raised error")
+        except sqlite.OperationalError, e:
+            self.failUnlessEqual(e.args[0], "user-defined aggregate's 'finalize' method raised error")
 
     def CheckAggrExceptionInInit(self):
         cur = self.con.cursor()
@@ -298,8 +297,8 @@ class AggregateTests(unittest.TestCase):
             cur.execute("select excInit(t) from test")
             val = cur.fetchone()[0]
             self.fail("should have raised an OperationalError")
-        except sqlite.OperationalError as e:
-            self.assertEqual(e.args[0], "user-defined aggregate's '__init__' method raised error")
+        except sqlite.OperationalError, e:
+            self.failUnlessEqual(e.args[0], "user-defined aggregate's '__init__' method raised error")
 
     def CheckAggrExceptionInStep(self):
         cur = self.con.cursor()
@@ -307,8 +306,8 @@ class AggregateTests(unittest.TestCase):
             cur.execute("select excStep(t) from test")
             val = cur.fetchone()[0]
             self.fail("should have raised an OperationalError")
-        except sqlite.OperationalError as e:
-            self.assertEqual(e.args[0], "user-defined aggregate's 'step' method raised error")
+        except sqlite.OperationalError, e:
+            self.failUnlessEqual(e.args[0], "user-defined aggregate's 'step' method raised error")
 
     def CheckAggrExceptionInFinalize(self):
         cur = self.con.cursor()
@@ -316,38 +315,38 @@ class AggregateTests(unittest.TestCase):
             cur.execute("select excFinalize(t) from test")
             val = cur.fetchone()[0]
             self.fail("should have raised an OperationalError")
-        except sqlite.OperationalError as e:
-            self.assertEqual(e.args[0], "user-defined aggregate's 'finalize' method raised error")
+        except sqlite.OperationalError, e:
+            self.failUnlessEqual(e.args[0], "user-defined aggregate's 'finalize' method raised error")
 
     def CheckAggrCheckParamStr(self):
         cur = self.con.cursor()
         cur.execute("select checkType('str', ?)", ("foo",))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckAggrCheckParamInt(self):
         cur = self.con.cursor()
         cur.execute("select checkType('int', ?)", (42,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckAggrCheckParamFloat(self):
         cur = self.con.cursor()
         cur.execute("select checkType('float', ?)", (3.14,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckAggrCheckParamNone(self):
         cur = self.con.cursor()
         cur.execute("select checkType('None', ?)", (None,))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckAggrCheckParamBlob(self):
         cur = self.con.cursor()
-        cur.execute("select checkType('blob', ?)", (memoryview(b"blob"),))
+        cur.execute("select checkType('blob', ?)", (buffer("blob"),))
         val = cur.fetchone()[0]
-        self.assertEqual(val, 1)
+        self.failUnlessEqual(val, 1)
 
     def CheckAggrCheckAggrSum(self):
         cur = self.con.cursor()
@@ -355,7 +354,7 @@ class AggregateTests(unittest.TestCase):
         cur.executemany("insert into test(i) values (?)", [(10,), (20,), (30,)])
         cur.execute("select mysum(i) from test")
         val = cur.fetchone()[0]
-        self.assertEqual(val, 60)
+        self.failUnlessEqual(val, 60)
 
 def authorizer_cb(action, arg1, arg2, dbname, source):
     if action != sqlite.SQLITE_SELECT:
@@ -385,7 +384,7 @@ class AuthorizerTests(unittest.TestCase):
     def CheckTableAccess(self):
         try:
             self.con.execute("select * from t2")
-        except sqlite.DatabaseError as e:
+        except sqlite.DatabaseError, e:
             if not e.args[0].endswith("prohibited"):
                 self.fail("wrong exception text: %s" % e.args[0])
             return
@@ -394,7 +393,7 @@ class AuthorizerTests(unittest.TestCase):
     def CheckColumnAccess(self):
         try:
             self.con.execute("select c2 from t1")
-        except sqlite.DatabaseError as e:
+        except sqlite.DatabaseError, e:
             if not e.args[0].endswith("prohibited"):
                 self.fail("wrong exception text: %s" % e.args[0])
             return

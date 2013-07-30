@@ -9,11 +9,9 @@ Note that tab width in IDLE is currently fixed at eight due to Tk issues.
 Refer to comments in EditorWindow autoindent code for details.
 
 """
-from tkinter import *
-import tkinter.messagebox as tkMessageBox
-import tkinter.colorchooser as tkColorChooser
-import tkinter.font as tkFont
-import copy
+from Tkinter import *
+import tkMessageBox, tkColorChooser, tkFont
+import string
 
 from idlelib.configHandler import idleConf
 from idlelib.dynOptionMenuWidget import DynOptionMenu
@@ -30,7 +28,6 @@ class ConfigDialog(Toplevel):
         self.wm_withdraw()
 
         self.configure(borderwidth=5)
-        self.title('IDLE Preferences')
         self.geometry("+%d+%d" % (parent.winfo_rootx()+20,
                 parent.winfo_rooty()+30))
         #Theme Elements. Each theme element key is its display name.
@@ -73,27 +70,25 @@ class ConfigDialog(Toplevel):
                 page_names=['Fonts/Tabs','Highlighting','Keys','General'])
         frameActionButtons = Frame(self,pady=2)
         #action buttons
-
         if macosxSupport.runningAsOSXApp():
-            # Surpress the padx and pady arguments when
-            # running as IDLE.app, otherwise the text
-            # on these buttons will not be readable.
-            extraKwds={}
+            # Changing the default padding on OSX results in unreadable
+            # text in the buttons
+            paddingArgs={}
         else:
-            extraKwds=dict(padx=6, pady=3)
+            paddingArgs={'padx':6, 'pady':3}
 
         self.buttonHelp = Button(frameActionButtons,text='Help',
                 command=self.Help,takefocus=FALSE,
-                **extraKwds)
+                **paddingArgs)
         self.buttonOk = Button(frameActionButtons,text='Ok',
                 command=self.Ok,takefocus=FALSE,
-                **extraKwds)
+                **paddingArgs)
         self.buttonApply = Button(frameActionButtons,text='Apply',
                 command=self.Apply,takefocus=FALSE,
-                **extraKwds)
+                **paddingArgs)
         self.buttonCancel = Button(frameActionButtons,text='Cancel',
                 command=self.Cancel,takefocus=FALSE,
-                **extraKwds)
+                **paddingArgs)
         self.CreatePageFontTab()
         self.CreatePageHighlight()
         self.CreatePageKeys()
@@ -205,7 +200,7 @@ class ConfigDialog(Toplevel):
             (' ','normal'),('stderr','stderr'),('\n','normal'))
         for txTa in textAndTags:
             text.insert(END,txTa[0],txTa[1])
-        for element in self.themeElements:
+        for element in self.themeElements.keys():
             text.tag_bind(self.themeElements[element][0],'<ButtonPress-1>',
                 lambda event,elem=element: event.widget.winfo_toplevel()
                 .highlightTarget.set(elem))
@@ -347,6 +342,7 @@ class ConfigDialog(Toplevel):
                              text=' Autosave Preferences ')
         frameWinSize=Frame(frame,borderwidth=2,relief=GROOVE)
         frameParaSize=Frame(frame,borderwidth=2,relief=GROOVE)
+        frameEncoding=Frame(frame,borderwidth=2,relief=GROOVE)
         frameHelp=LabelFrame(frame,borderwidth=2,relief=GROOVE,
                              text=' Additional Help Sources ')
         #frameRun
@@ -375,6 +371,14 @@ class ConfigDialog(Toplevel):
                 ' width (in characters)')
         entryParaWidth=Entry(frameParaSize,textvariable=self.paraWidth,
                 width=3)
+        #frameEncoding
+        labelEncodingTitle=Label(frameEncoding,text="Default Source Encoding")
+        radioEncLocale=Radiobutton(frameEncoding,variable=self.encoding,
+            value="locale",text="Locale-defined")
+        radioEncUTF8=Radiobutton(frameEncoding,variable=self.encoding,
+            value="utf-8",text="UTF-8")
+        radioEncNone=Radiobutton(frameEncoding,variable=self.encoding,
+            value="none",text="None")
         #frameHelp
         frameHelpList=Frame(frameHelp)
         frameHelpListButtons=Frame(frameHelpList)
@@ -396,6 +400,7 @@ class ConfigDialog(Toplevel):
         frameSave.pack(side=TOP,padx=5,pady=5,fill=X)
         frameWinSize.pack(side=TOP,padx=5,pady=5,fill=X)
         frameParaSize.pack(side=TOP,padx=5,pady=5,fill=X)
+        frameEncoding.pack(side=TOP,padx=5,pady=5,fill=X)
         frameHelp.pack(side=TOP,padx=5,pady=5,expand=TRUE,fill=BOTH)
         #frameRun
         labelRunChoiceTitle.pack(side=LEFT,anchor=W,padx=5,pady=5)
@@ -414,6 +419,11 @@ class ConfigDialog(Toplevel):
         #paragraphFormatWidth
         labelParaWidthTitle.pack(side=LEFT,anchor=W,padx=5,pady=5)
         entryParaWidth.pack(side=RIGHT,anchor=E,padx=10,pady=5)
+        #frameEncoding
+        labelEncodingTitle.pack(side=LEFT,anchor=W,padx=5,pady=5)
+        radioEncNone.pack(side=RIGHT,anchor=E,pady=5)
+        radioEncUTF8.pack(side=RIGHT,anchor=E,pady=5)
+        radioEncLocale.pack(side=RIGHT,anchor=E,pady=5)
         #frameHelp
         frameHelpListButtons.pack(side=RIGHT,padx=5,pady=5,fill=Y)
         frameHelpList.pack(side=TOP,padx=5,pady=5,expand=TRUE,fill=BOTH)
@@ -551,13 +561,13 @@ class ConfigDialog(Toplevel):
 
     def AddChangedItem(self,type,section,item,value):
         value=str(value) #make sure we use a string
-        if section not in self.changedItems[type]:
+        if not self.changedItems[type].has_key(section):
             self.changedItems[type][section]={}
         self.changedItems[type][section][item]=value
 
     def GetDefaultItems(self):
         dItems={'main':{},'highlight':{},'keys':{},'extensions':{}}
-        for configType in dItems:
+        for configType in dItems.keys():
             sections=idleConf.GetSectionList('default',configType)
             for section in sections:
                 dItems[configType][section]={}
@@ -598,11 +608,11 @@ class ConfigDialog(Toplevel):
         else:
             currentKeySetName=self.customKeys.get()
         currentBindings=idleConf.GetCurrentKeySet()
-        if currentKeySetName in self.changedItems['keys']: #unsaved changes
+        if currentKeySetName in self.changedItems['keys'].keys(): #unsaved changes
             keySetChanges=self.changedItems['keys'][currentKeySetName]
-            for event in keySetChanges:
+            for event in keySetChanges.keys():
                 currentBindings[event]=keySetChanges[event].split()
-        currentKeySequences = list(currentBindings.values())
+        currentKeySequences=currentBindings.values()
         newKeys=GetKeysDialog(self,'Get New Keys',bindName,
                 currentKeySequences).result
         if newKeys: #new keys were specified
@@ -649,14 +659,14 @@ class ConfigDialog(Toplevel):
             prevKeySetName=self.customKeys.get()
         prevKeys=idleConf.GetCoreKeys(prevKeySetName)
         newKeys={}
-        for event in prevKeys: #add key set to changed items
+        for event in prevKeys.keys(): #add key set to changed items
             eventName=event[2:-2] #trim off the angle brackets
-            binding=' '.join(prevKeys[event])
+            binding=string.join(prevKeys[event])
             newKeys[eventName]=binding
         #handle any unsaved changes to prev key set
-        if prevKeySetName in self.changedItems['keys']:
+        if prevKeySetName in self.changedItems['keys'].keys():
             keySetChanges=self.changedItems['keys'][prevKeySetName]
-            for event in keySetChanges:
+            for event in keySetChanges.keys():
                 newKeys[event]=keySetChanges[event]
         #save the new theme
         self.SaveNewKeySet(newKeySetName,newKeys)
@@ -674,15 +684,15 @@ class ConfigDialog(Toplevel):
             reselect=1
             listIndex=self.listBindings.index(ANCHOR)
         keySet=idleConf.GetKeySet(keySetName)
-        bindNames = list(keySet.keys())
+        bindNames=keySet.keys()
         bindNames.sort()
         self.listBindings.delete(0,END)
         for bindName in bindNames:
-            key=' '.join(keySet[bindName]) #make key(s) into a string
+            key=string.join(keySet[bindName]) #make key(s) into a string
             bindName=bindName[2:-2] #trim off the angle brackets
-            if keySetName in self.changedItems['keys']:
+            if keySetName in self.changedItems['keys'].keys():
                 #handle any unsaved changes to this key set
-                if bindName in self.changedItems['keys'][keySetName]:
+                if bindName in self.changedItems['keys'][keySetName].keys():
                     key=self.changedItems['keys'][keySetName][bindName]
             self.listBindings.insert(END, bindName+' - '+key)
         if reselect:
@@ -698,7 +708,7 @@ class ConfigDialog(Toplevel):
             return
         #remove key set from config
         idleConf.userCfg['keys'].remove_section(keySetName)
-        if keySetName in self.changedItems['keys']:
+        if self.changedItems['keys'].has_key(keySetName):
             del(self.changedItems['keys'][keySetName])
         #write changes
         idleConf.userCfg['keys'].Save()
@@ -725,7 +735,7 @@ class ConfigDialog(Toplevel):
             return
         #remove theme from config
         idleConf.userCfg['highlight'].remove_section(themeName)
-        if themeName in self.changedItems['highlight']:
+        if self.changedItems['highlight'].has_key(themeName):
             del(self.changedItems['highlight'][themeName])
         #write changes
         idleConf.userCfg['highlight'].Save()
@@ -797,9 +807,9 @@ class ConfigDialog(Toplevel):
             themeName=self.customTheme.get()
         newTheme=idleConf.GetThemeDict(themeType,themeName)
         #apply any of the old theme's unsaved changes to the new theme
-        if themeName in self.changedItems['highlight']:
+        if themeName in self.changedItems['highlight'].keys():
             themeChanges=self.changedItems['highlight'][themeName]
-            for element in themeChanges:
+            for element in themeChanges.keys():
                 newTheme[element]=themeChanges[element]
         #save the new theme
         self.SaveNewTheme(newThemeName,newTheme)
@@ -851,18 +861,18 @@ class ConfigDialog(Toplevel):
             theme=self.builtinTheme.get()
         else: #a user theme
             theme=self.customTheme.get()
-        for elementTitle in self.themeElements:
+        for elementTitle in self.themeElements.keys():
             element=self.themeElements[elementTitle][0]
             colours=idleConf.GetHighlight(theme,element)
             if element=='cursor': #cursor sample needs special painting
                 colours['background']=idleConf.GetHighlight(theme,
                         'normal', fgBg='bg')
             #handle any unsaved changes to this theme
-            if theme in self.changedItems['highlight']:
+            if theme in self.changedItems['highlight'].keys():
                 themeDict=self.changedItems['highlight'][theme]
-                if element+'-foreground' in themeDict:
+                if themeDict.has_key(element+'-foreground'):
                     colours['foreground']=themeDict[element+'-foreground']
-                if element+'-background' in themeDict:
+                if themeDict.has_key(element+'-background'):
                     colours['background']=themeDict[element+'-background']
             self.textHighlightSample.tag_config(element, **colours)
         self.SetColourSample()
@@ -915,7 +925,7 @@ class ConfigDialog(Toplevel):
         self.changedItems['main']['HelpFiles'] = {}
         for num in range(1,len(self.userHelpList)+1):
             self.AddChangedItem('main','HelpFiles',str(num),
-                    ';'.join(self.userHelpList[num-1][:2]))
+                    string.join(self.userHelpList[num-1][:2],';'))
 
     def LoadFontCfg(self):
         ##base editor font selection list
@@ -977,7 +987,7 @@ class ConfigDialog(Toplevel):
             self.optMenuThemeBuiltin.SetMenu(itemList,itemList[0])
         self.SetThemeType()
         ##load theme element option menu
-        themeNames = list(self.themeElements.keys())
+        themeNames=self.themeElements.keys()
         themeNames.sort(key=lambda x: self.themeElements[x][1])
         self.optMenuHighlightTarget.SetMenu(themeNames,themeNames[0])
         self.PaintThemeSample()
@@ -1057,7 +1067,7 @@ class ConfigDialog(Toplevel):
         """
         if not idleConf.userCfg['keys'].has_section(keySetName):
             idleConf.userCfg['keys'].add_section(keySetName)
-        for event in keySet:
+        for event in keySet.keys():
             value=keySet[event]
             idleConf.userCfg['keys'].SetOption(keySetName,event,value)
 
@@ -1069,7 +1079,7 @@ class ConfigDialog(Toplevel):
         """
         if not idleConf.userCfg['highlight'].has_section(themeName):
             idleConf.userCfg['highlight'].add_section(themeName)
-        for element in theme:
+        for element in theme.keys():
             value=theme[element]
             idleConf.userCfg['highlight'].SetOption(themeName,element,value)
 
@@ -1084,14 +1094,14 @@ class ConfigDialog(Toplevel):
     def SaveAllChangedConfigs(self):
         "Save configuration changes to the user config file."
         idleConf.userCfg['main'].Save()
-        for configType in self.changedItems:
+        for configType in self.changedItems.keys():
             cfgTypeHasChanges = False
-            for section in self.changedItems[configType]:
+            for section in self.changedItems[configType].keys():
                 if section == 'HelpFiles':
                     #this section gets completely replaced
                     idleConf.userCfg['main'].remove_section('HelpFiles')
                     cfgTypeHasChanges = True
-                for item in self.changedItems[configType][section]:
+                for item in self.changedItems[configType][section].keys():
                     value = self.changedItems[configType][section][item]
                     if self.SetUserValue(configType,section,item,value):
                         cfgTypeHasChanges = True
@@ -1105,13 +1115,13 @@ class ConfigDialog(Toplevel):
     def DeactivateCurrentConfig(self):
         #Before a config is saved, some cleanup of current
         #config must be done - remove the previous keybindings
-        winInstances = self.parent.instance_dict.keys()
+        winInstances=self.parent.instance_dict.keys()
         for instance in winInstances:
             instance.RemoveKeybindings()
 
     def ActivateConfigChanges(self):
         "Dynamically apply configuration changes"
-        winInstances = self.parent.instance_dict.keys()
+        winInstances=self.parent.instance_dict.keys()
         for instance in winInstances:
             instance.ResetColorizer()
             instance.ResetFont()

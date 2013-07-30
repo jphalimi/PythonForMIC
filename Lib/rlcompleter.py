@@ -28,12 +28,18 @@ application (or the user) to enable this feature, I consider this an
 acceptable risk.  More complicated expressions (e.g. function calls or
 indexing operations) are *not* evaluated.
 
+- GNU readline is also used by the built-in functions input() and
+raw_input(), and thus these also benefit/suffer from the completer
+features.  Clearly an interactive application can benefit by
+specifying its own completer function and using raw_input() for all
+its input.
+
 - When the original stdin is not a tty device, GNU readline is never
 used, and this module (and the readline module) are silently inactive.
 
 """
 
-import builtins
+import __builtin__
 import __main__
 
 __all__ = ["Completer"]
@@ -55,7 +61,7 @@ class Completer:
         """
 
         if namespace and not isinstance(namespace, dict):
-            raise TypeError('namespace must be a dictionary')
+            raise TypeError,'namespace must be a dictionary'
 
         # Don't bind to namespace quite yet, but flag whether the user wants a
         # specific namespace or to use __main__.__dict__. This will allow us
@@ -104,7 +110,7 @@ class Completer:
         for word in keyword.kwlist:
             if word[:n] == text:
                 matches.append(word)
-        for nspace in [builtins.__dict__, self.namespace]:
+        for nspace in [__builtin__.__dict__, self.namespace]:
             for word, val in nspace.items():
                 if word[:n] == text and word != "__builtins__":
                     matches.append(self._callable_postfix(val, word))

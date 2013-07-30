@@ -9,6 +9,27 @@ else:
     THIS_ENDIAN = ">"
     OTHER_ENDIAN = "<"
 
+class memoryview(object):
+    # This class creates a memoryview - like object from data returned
+    # by the private _ctypes._buffer_info() function, just enough for
+    # these tests.
+    #
+    # It can be removed when the py3k memoryview object is backported.
+    def __init__(self, ob):
+        from _ctypes import _buffer_info
+        self.format, self.ndim, self.shape = _buffer_info(ob)
+        if self.shape == ():
+            self.shape = None
+            self.itemsize = sizeof(ob)
+        else:
+            size = sizeof(ob)
+            for dim in self.shape:
+                size //= dim
+            self.itemsize = size
+        self.strides = None
+        self.readonly = False
+        self.size = sizeof(ob)
+
 def normalize(format):
     # Remove current endian specifier and white space from a format
     # string
@@ -24,23 +45,20 @@ class Test(unittest.TestCase):
             ob = tp()
             v = memoryview(ob)
             try:
-                self.assertEqual(normalize(v.format), normalize(fmt))
-                if shape is not None:
-                    self.assertEqual(len(v), shape[0])
-                else:
-                    self.assertEqual(len(v) * sizeof(itemtp), sizeof(ob))
-                self.assertEqual(v.itemsize, sizeof(itemtp))
-                self.assertEqual(v.shape, shape)
+                self.failUnlessEqual(normalize(v.format), normalize(fmt))
+                self.failUnlessEqual(v.size, sizeof(ob))
+                self.failUnlessEqual(v.itemsize, sizeof(itemtp))
+                self.failUnlessEqual(v.shape, shape)
                 # ctypes object always have a non-strided memory block
-                self.assertEqual(v.strides, None)
+                self.failUnlessEqual(v.strides, None)
                 # they are always read/write
-                self.assertFalse(v.readonly)
+                self.failIf(v.readonly)
 
                 if v.shape:
                     n = 1
                     for dim in v.shape:
                         n = n * dim
-                    self.assertEqual(n * v.itemsize, len(v.tobytes()))
+                    self.failUnlessEqual(v.itemsize * n, v.size)
             except:
                 # so that we can see the failing type
                 print(tp)
@@ -51,23 +69,20 @@ class Test(unittest.TestCase):
             ob = tp()
             v = memoryview(ob)
             try:
-                self.assertEqual(v.format, fmt)
-                if shape is not None:
-                    self.assertEqual(len(v), shape[0])
-                else:
-                    self.assertEqual(len(v) * sizeof(itemtp), sizeof(ob))
-                self.assertEqual(v.itemsize, sizeof(itemtp))
-                self.assertEqual(v.shape, shape)
+                self.failUnlessEqual(v.format, fmt)
+                self.failUnlessEqual(v.size, sizeof(ob))
+                self.failUnlessEqual(v.itemsize, sizeof(itemtp))
+                self.failUnlessEqual(v.shape, shape)
                 # ctypes object always have a non-strided memory block
-                self.assertEqual(v.strides, None)
+                self.failUnlessEqual(v.strides, None)
                 # they are always read/write
-                self.assertFalse(v.readonly)
+                self.failIf(v.readonly)
 
                 if v.shape:
                     n = 1
                     for dim in v.shape:
                         n = n * dim
-                    self.assertEqual(n, len(v))
+                    self.failUnlessEqual(v.itemsize * n, v.size)
             except:
                 # so that we can see the failing type
                 print(tp)

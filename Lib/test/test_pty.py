@@ -1,22 +1,18 @@
-from test.support import verbose, run_unittest, import_module, reap_children
-
-#Skip these tests if either fcntl or termios is not available
-fcntl = import_module('fcntl')
-import_module('termios')
-
 import errno
+import fcntl
 import pty
 import os
 import sys
 import signal
+from test.test_support import verbose, TestSkipped, run_unittest
 import unittest
 
-TEST_STRING_1 = b"I wish to buy a fish license.\n"
-TEST_STRING_2 = b"For my pet fish, Eric.\n"
+TEST_STRING_1 = "I wish to buy a fish license.\n"
+TEST_STRING_2 = "For my pet fish, Eric.\n"
 
 if verbose:
     def debug(msg):
-        print(msg)
+        print msg
 else:
     def debug(msg):
         pass
@@ -34,12 +30,12 @@ def normalize_output(data):
     # from someone more knowledgable.
 
     # OSF/1 (Tru64) apparently turns \n into \r\r\n.
-    if data.endswith(b'\r\r\n'):
-        return data.replace(b'\r\r\n', b'\n')
+    if data.endswith('\r\r\n'):
+        return data.replace('\r\r\n', '\n')
 
     # IRIX apparently turns \n into \r\n.
-    if data.endswith(b'\r\n'):
-        return data.replace(b'\r\n', b'\n')
+    if data.endswith('\r\n'):
+        return data.replace('\r\n', '\n')
 
     return data
 
@@ -73,7 +69,7 @@ class PtyTest(unittest.TestCase):
             debug("Got slave_fd '%d'" % slave_fd)
         except OSError:
             # " An optional feature could not be imported " ... ?
-            raise unittest.SkipTest("Pseudo-terminals (seemingly) not functional.")
+            raise TestSkipped, "Pseudo-terminals (seemingly) not functional."
 
         self.assertTrue(os.isatty(slave_fd), 'slave_fd is not a tty')
 
@@ -86,8 +82,8 @@ class PtyTest(unittest.TestCase):
         fcntl.fcntl(master_fd, fcntl.F_SETFL, orig_flags | os.O_NONBLOCK)
         try:
             s1 = os.read(master_fd, 1024)
-            self.assertEqual(b'', s1)
-        except OSError as e:
+            self.assertEquals('', s1)
+        except OSError, e:
             if e.errno != errno.EAGAIN:
                 raise
         # Restore the original flags.
@@ -96,14 +92,14 @@ class PtyTest(unittest.TestCase):
         debug("Writing to slave_fd")
         os.write(slave_fd, TEST_STRING_1)
         s1 = os.read(master_fd, 1024)
-        self.assertEqual(b'I wish to buy a fish license.\n',
-                         normalize_output(s1))
+        self.assertEquals('I wish to buy a fish license.\n',
+                          normalize_output(s1))
 
         debug("Writing chunked output")
         os.write(slave_fd, TEST_STRING_2[:5])
         os.write(slave_fd, TEST_STRING_2[5:])
         s2 = os.read(master_fd, 1024)
-        self.assertEqual(b'For my pet fish, Eric.\n', normalize_output(s2))
+        self.assertEquals('For my pet fish, Eric.\n', normalize_output(s2))
 
         os.close(slave_fd)
         os.close(master_fd)
@@ -161,8 +157,7 @@ class PtyTest(unittest.TestCase):
                     break
                 if not data:
                     break
-                sys.stdout.write(str(data.replace(b'\r\n', b'\n'),
-                                     encoding='ascii'))
+                sys.stdout.write(data.replace('\r\n', '\n'))
 
             ##line = os.read(master_fd, 80)
             ##lines = line.replace('\r\n', '\n').split('\n')
@@ -195,10 +190,7 @@ class PtyTest(unittest.TestCase):
         # pty.fork() passed.
 
 def test_main(verbose=None):
-    try:
-        run_unittest(PtyTest)
-    finally:
-        reap_children()
+    run_unittest(PtyTest)
 
 if __name__ == "__main__":
     test_main()

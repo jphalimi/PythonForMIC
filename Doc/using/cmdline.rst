@@ -1,8 +1,5 @@
 .. highlightlang:: none
 
-.. ATTENTION: You probably should update Misc/python.man, too, if you modify
-.. this file.
-
 .. _using-on-general:
 
 Command line and environment
@@ -24,7 +21,7 @@ Command line
 
 When invoking Python, you may specify any of these options::
 
-    python [-bBdEhiOsSuvVWx?] [-c command | -m module-name | script | - ] [args]
+    python [-BdEiOQsStuUvVWxX3?] [-c command | -m module-name | script | - ] [args]
 
 The most common use case is, of course, a simple invocation of a script::
 
@@ -81,12 +78,6 @@ source.
    the implementation may not always enforce this (e.g. it may allow you to
    use a name that includes a hyphen).
 
-   Package names are also permitted. When a package name is supplied instead
-   of a normal module, the interpreter will execute ``<pkg>.__main__`` as
-   the main module. This behaviour is deliberately similar to the handling
-   of directories and zipfiles that are passed to the interpreter as the
-   script argument.
-
    .. note::
 
       This option cannot be used with built-in modules and extension modules
@@ -95,9 +86,8 @@ source.
       file is not available.
 
    If this option is given, the first element of :data:`sys.argv` will be the
-   full path to the module file (while the module file is being located, the
-   first element will be set to ``"-m"``). As with the :option:`-c` option,
-   the current directory will be added to the start of :data:`sys.path`.
+   full path to the module file. As with the :option:`-c` option, the current
+   directory will be added to the start of :data:`sys.path`.
 
    Many standard library modules contain code that is invoked on their execution
    as a script.  An example is the :mod:`timeit` module::
@@ -107,13 +97,14 @@ source.
 
    .. seealso::
       :func:`runpy.run_module`
-         Equivalent functionality directly available to Python code
+         The actual implementation of this feature.
 
       :pep:`338` -- Executing modules as scripts
 
+   .. versionadded:: 2.4
 
-   .. versionchanged:: 3.1
-      Supply the package name to run a ``__main__`` submodule.
+   .. versionchanged:: 2.5
+      The named module can now be located inside a package.
 
 
 .. describe:: -
@@ -144,6 +135,9 @@ source.
    added to the start of :data:`sys.path` and the ``__main__.py`` file in
    that location is executed as the :mod:`__main__` module.
 
+   .. versionchanged:: 2.5
+      Directories and zipfiles containing a ``__main__.py`` file at the top
+      level are now considered valid Python scripts.
 
 If no interface option is given, :option:`-i` is implied, ``sys.argv[0]`` is
 an empty string (``""``) and the current directory will be added to the
@@ -161,28 +155,30 @@ Generic options
 
    Print a short description of all command line options.
 
+   .. versionchanged:: 2.5
+      The ``--help`` variant.
+
 
 .. cmdoption:: -V
                --version
 
    Print the Python version number and exit.  Example output could be::
 
-       Python 3.0
+       Python 2.5.1
+
+   .. versionchanged:: 2.5
+      The ``--version`` variant.
 
 
 Miscellaneous options
 ~~~~~~~~~~~~~~~~~~~~~
 
-.. cmdoption:: -b
-
-   Issue a warning when comparing str and bytes. Issue an error when the
-   option is given twice (:option:`-bb`).
-
-
 .. cmdoption:: -B
 
    If given, Python won't try to write ``.pyc`` or ``.pyo`` files on the
    import of source modules.  See also :envvar:`PYTHONDONTWRITEBYTECODE`.
+
+   .. versionadded:: 2.6
 
 
 .. cmdoption:: -d
@@ -195,6 +191,8 @@ Miscellaneous options
 
    Ignore all :envvar:`PYTHON*` environment variables, e.g.
    :envvar:`PYTHONPATH` and :envvar:`PYTHONHOME`, that might be set.
+
+   .. versionadded:: 2.2
 
 
 .. cmdoption:: -i
@@ -220,17 +218,32 @@ Miscellaneous options
    Discard docstrings in addition to the :option:`-O` optimizations.
 
 
-.. cmdoption:: -q
+.. cmdoption:: -Q <arg>
 
-   Don't display the copyright and version messages even in interactive mode.
+   Division control. The argument must be one of the following:
 
-   .. versionadded:: 3.2
+   ``old``
+     division of int/int and long/long return an int or long (*default*)
+   ``new``
+     new division semantics, i.e. division of int/int and long/long returns a
+     float
+   ``warn``
+     old division semantics with a warning for int/int and long/long
+   ``warnall``
+     old division semantics with a warning for all uses of the division operator
+
+   .. seealso::
+      :file:`Tools/scripts/fixdiv.py`
+         for a use of ``warnall``
+
+      :pep:`238` -- Changing the division operator
 
 
 .. cmdoption:: -s
 
-   Don't add the :data:`user site-packages directory <site.USER_SITE>` to
-   :data:`sys.path`.
+   Don't add user site directory to sys.path
+
+   .. versionadded:: 2.6
 
    .. seealso::
 
@@ -243,11 +256,22 @@ Miscellaneous options
    manipulations of :data:`sys.path` that it entails.
 
 
+.. cmdoption:: -t
+
+   Issue a warning when a source file mixes tabs and spaces for indentation in a
+   way that makes it depend on the worth of a tab expressed in spaces.  Issue an
+   error when the option is given twice (:option:`-tt`).
+
+
 .. cmdoption:: -u
 
-   Force the binary layer of the stdin, stdout and stderr streams (which is
-   available as their ``buffer`` attribute) to be unbuffered.  The text I/O
-   layer will still be line-buffered.
+   Force stdin, stdout and stderr to be totally unbuffered.  On systems where it
+   matters, also put stdin, stdout and stderr in binary mode.
+
+   Note that there is internal buffering in :meth:`file.readlines` and
+   :ref:`bltin-file-objects` (``for line in sys.stdin``) which is not influenced
+   by this option.  To work around this, you will want to use
+   :meth:`file.readline` inside a ``while 1:`` loop.
 
    See also :envvar:`PYTHONUNBUFFERED`.
 
@@ -281,7 +305,7 @@ Miscellaneous options
    :mod:`warnings` module.
 
    The simplest form of argument is one of the following action strings (or a
-   unique abbreviation):
+   unique abbreviation) by themselves:
 
    ``ignore``
       Ignore all warnings.
@@ -307,7 +331,7 @@ Miscellaneous options
    the remaining fields.  Empty fields match all values; trailing empty fields
    may be omitted.  The *message* field matches the start of the warning message
    printed; this match is case-insensitive.  The *category* field matches the
-   warning category.  This must be a class name; the match tests whether the
+   warning category.  This must be a class name; the match test whether the
    actual warning category of the message is a subclass of the specified warning
    category.  The full class name must be given.  The *module* field matches the
    (fully-qualified) module name; this match is case-sensitive.  The *line*
@@ -319,8 +343,6 @@ Miscellaneous options
 
       :pep:`230` -- Warning framework
 
-      :envvar:`PYTHONWARNINGS`
-
 
 .. cmdoption:: -x
 
@@ -329,16 +351,22 @@ Miscellaneous options
 
    .. note:: The line numbers in error messages will be off by one.
 
+.. cmdoption:: -3
 
-.. cmdoption:: -X
+   Warn about Python 3.x incompatibilities which cannot be fixed trivially by
+   :ref:`2to3 <2to3-reference>`. Among these are:
 
-   Reserved for various implementation-specific options.  CPython currently
-   defines none of them, but allows to pass arbitrary values and retrieve
-   them through the :data:`sys._xoptions` dictionary.
+   * :meth:`dict.has_key`
+   * :func:`apply`
+   * :func:`callable`
+   * :func:`coerce`
+   * :func:`execfile`
+   * :func:`reduce`
+   * :func:`reload`
 
-   .. versionchanged:: 3.2
-      It is now allowed to pass :option:`-X` with CPython.
+   Using these will emit a :exc:`DeprecationWarning`.
 
+   .. versionadded:: 2.6
 
 Options you shouldn't use
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -348,6 +376,22 @@ Options you shouldn't use
    Reserved for use by Jython_.
 
 .. _Jython: http://jython.org
+
+.. cmdoption:: -U
+
+   Turns all string literals into unicodes globally.  Do not be tempted to use
+   this option as it will probably break your world.  It also produces
+   ``.pyc`` files with a different magic number than normal.  Instead, you can
+   enable unicode literals on a per-module basis by using::
+
+        from __future__ import unicode_literals
+
+   at the top of the file.  See :mod:`__future__` for details.
+
+.. cmdoption:: -X
+
+    Reserved for alternative implementations of Python to use for their own
+    purposes.
 
 .. _using-on-envvars:
 
@@ -455,22 +499,22 @@ These environment variables influence Python's behavior.
    If this is set, Python won't try to write ``.pyc`` or ``.pyo`` files on the
    import of source modules.
 
+   .. versionadded:: 2.6
 
 .. envvar:: PYTHONIOENCODING
 
-   If this is set before running the interpreter, it overrides the encoding used
-   for stdin/stdout/stderr, in the syntax ``encodingname:errorhandler``. The
-   ``:errorhandler`` part is optional and has the same meaning as in
-   :func:`str.encode`.
+   Overrides the encoding used for stdin/stdout/stderr, in the syntax
+   ``encodingname:errorhandler``.  The ``:errorhandler`` part is optional and
+   has the same meaning as in :func:`str.encode`.
 
-   For stderr, the ``:errorhandler`` part is ignored; the handler will always be
-   ``'backslashreplace'``.
+   .. versionadded:: 2.6
 
 
 .. envvar:: PYTHONNOUSERSITE
 
-   If this is set, Python won't add the :data:`user site-packages directory
-   <site.USER_SITE>` to :data:`sys.path`.
+   If this is set, Python won't add the user site directory to sys.path
+
+   .. versionadded:: 2.6
 
    .. seealso::
 
@@ -479,10 +523,9 @@ These environment variables influence Python's behavior.
 
 .. envvar:: PYTHONUSERBASE
 
-   Defines the :data:`user base directory <site.USER_BASE>`, which is used to
-   compute the path of the :data:`user site-packages directory <site.USER_SITE>`
-   and :ref:`Distutils installation paths <inst-alt-install-user>` for ``python
-   setup.py install --user``.
+   Sets the base directory for the user site directory
+
+   .. versionadded:: 2.6
 
    .. seealso::
 
@@ -495,23 +538,19 @@ These environment variables influence Python's behavior.
    value instead of the value got through the C runtime.  Only works on
    Mac OS X.
 
-.. envvar:: PYTHONWARNINGS
-
-   This is equivalent to the :option:`-W` option. If set to a comma
-   separated string, it is equivalent to specifying :option:`-W` multiple
-   times.
-
 
 Debug-mode variables
 ~~~~~~~~~~~~~~~~~~~~
 
 Setting these variables only has an effect in a debug build of Python, that is,
-if Python was configured with the ``--with-pydebug`` build option.
+if Python was configured with the :option:`--with-pydebug` build option.
 
 .. envvar:: PYTHONTHREADDEBUG
 
    If set, Python will print threading debug info.
 
+   .. versionchanged:: 2.6
+      Previously, this variable was called ``THREADDEBUG``.
 
 .. envvar:: PYTHONDUMPREFS
 

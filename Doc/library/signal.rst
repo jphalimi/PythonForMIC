@@ -1,3 +1,4 @@
+
 :mod:`signal` --- Set handlers for asynchronous events
 ======================================================
 
@@ -68,30 +69,10 @@ The variables defined in the :mod:`signal` module are:
    All the signal numbers are defined symbolically.  For example, the hangup signal
    is defined as :const:`signal.SIGHUP`; the variable names are identical to the
    names used in C programs, as found in ``<signal.h>``. The Unix man page for
-   ':c:func:`signal`' lists the existing signals (on some systems this is
+   ':cfunc:`signal`' lists the existing signals (on some systems this is
    :manpage:`signal(2)`, on others the list is in :manpage:`signal(7)`). Note that
    not all systems define the same set of signal names; only those names defined by
    the system are defined by this module.
-
-
-.. data:: CTRL_C_EVENT
-
-   The signal corresponding to the CTRL+C keystroke event. This signal can
-   only be used with :func:`os.kill`.
-
-   Availability: Windows.
-
-   .. versionadded:: 3.2
-
-
-.. data:: CTRL_BREAK_EVENT
-
-   The signal corresponding to the CTRL+BREAK keystroke event. This signal can
-   only be used with :func:`os.kill`.
-
-   Availability: Windows.
-
-   .. versionadded:: 3.2
 
 
 .. data:: NSIG
@@ -101,8 +82,7 @@ The variables defined in the :mod:`signal` module are:
 
 .. data:: ITIMER_REAL
 
-   Decrements interval timer in real time, and delivers :const:`SIGALRM` upon
-   expiration.
+   Decrements interval timer in real time, and delivers :const:`SIGALRM` upon expiration.
 
 
 .. data:: ITIMER_VIRTUAL
@@ -180,11 +160,15 @@ The :mod:`signal` module defines the following functions:
    Attempting to pass an invalid interval timer will cause an
    :exc:`ItimerError`.  Availability: Unix.
 
+   .. versionadded:: 2.6
+
 
 .. function:: getitimer(which)
 
    Returns current value of a given interval timer specified by *which*.
    Availability: Unix.
+
+   .. versionadded:: 2.6
 
 
 .. function:: set_wakeup_fd(fd)
@@ -210,7 +194,9 @@ The :mod:`signal` module defines the following functions:
 
    Note that installing a signal handler with :func:`signal` will reset the
    restart behaviour to interruptible by implicitly calling
-   :c:func:`siginterrupt` with a true *flag* value for the given signal.
+   :cfunc:`siginterrupt` with a true *flag* value for the given signal.
+
+   .. versionadded:: 2.6
 
 
 .. function:: signal(signalnum, handler)
@@ -230,10 +216,6 @@ The :mod:`signal` module defines the following functions:
    see the :ref:`description in the type hierarchy <frame-objects>` or see the
    attribute descriptions in the :mod:`inspect` module).
 
-   On Windows, :func:`signal` can only be called with :const:`SIGABRT`,
-   :const:`SIGFPE`, :const:`SIGILL`, :const:`SIGINT`, :const:`SIGSEGV`, or
-   :const:`SIGTERM`. A :exc:`ValueError` will be raised in any other case.
-
 
 .. _signal-example:
 
@@ -250,7 +232,7 @@ be sent, and the handler raises an exception. ::
    import signal, os
 
    def handler(signum, frame):
-       print('Signal handler called with signal', signum)
+       print 'Signal handler called with signal', signum
        raise IOError("Couldn't open device!")
 
    # Set the signal handler and a 5-second alarm

@@ -5,9 +5,6 @@
    :synopsis: Conversion functions between RGB and other color systems.
 .. sectionauthor:: David Ascher <da@python.net>
 
-**Source code:** :source:`Lib/colorsys.py`
-
---------------
 
 The :mod:`colorsys` module defines bidirectional conversions of color values
 between colors expressed in the RGB (Red Green Blue) color space used in

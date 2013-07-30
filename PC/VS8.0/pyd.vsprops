@@ -15,11 +15,6 @@
 		OutputFile="$(OutDir)\$(ProjectName).pyd"
 		ProgramDatabaseFile="$(OutDir)\$(ProjectName).pdb"
 		ImportLibrary="$(OutDir)\$(TargetName).lib"
-		GenerateManifest="false"
-	/>
-	<Tool
-		Name="VCManifestTool"
-		EmbedManifest="false"
 	/>
 	<Tool
 		Name="VCPostBuildEventTool"

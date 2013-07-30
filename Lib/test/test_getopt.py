@@ -1,42 +1,45 @@
 # test_getopt.py
 # David Goodger <dgoodger@bigfoot.com> 2000-08-19
 
-from test.support import verbose, run_doctest, run_unittest, EnvironmentVarGuard
+from test.test_support import verbose, run_doctest, run_unittest
 import unittest
 
 import getopt
+import os
 
 sentinel = object()
 
 class GetoptTests(unittest.TestCase):
     def setUp(self):
-        self.env = EnvironmentVarGuard()
-        if "POSIXLY_CORRECT" in self.env:
-            del self.env["POSIXLY_CORRECT"]
+        self.old_posixly_correct = os.environ.get("POSIXLY_CORRECT", sentinel)
+        if self.old_posixly_correct is not sentinel:
+            del os.environ["POSIXLY_CORRECT"]
 
     def tearDown(self):
-        self.env.__exit__()
-        del self.env
+        if self.old_posixly_correct is sentinel:
+            os.environ.pop("POSIXLY_CORRECT", None)
+        else:
+            os.environ["POSIXLY_CORRECT"] = self.old_posixly_correct
 
     def assertError(self, *args, **kwargs):
         self.assertRaises(getopt.GetoptError, *args, **kwargs)
 
     def test_short_has_arg(self):
-        self.assertTrue(getopt.short_has_arg('a', 'a:'))
-        self.assertFalse(getopt.short_has_arg('a', 'a'))
+        self.failUnless(getopt.short_has_arg('a', 'a:'))
+        self.failIf(getopt.short_has_arg('a', 'a'))
         self.assertError(getopt.short_has_arg, 'a', 'b')
 
     def test_long_has_args(self):
         has_arg, option = getopt.long_has_args('abc', ['abc='])
-        self.assertTrue(has_arg)
+        self.failUnless(has_arg)
         self.assertEqual(option, 'abc')
 
         has_arg, option = getopt.long_has_args('abc', ['abc'])
-        self.assertFalse(has_arg)
+        self.failIf(has_arg)
         self.assertEqual(option, 'abc')
 
         has_arg, option = getopt.long_has_args('abc', ['abcd'])
-        self.assertFalse(has_arg)
+        self.failIf(has_arg)
         self.assertEqual(option, 'abcd')
 
         self.assertError(getopt.long_has_args, 'abc', ['def'])
@@ -121,18 +124,13 @@ class GetoptTests(unittest.TestCase):
         self.assertEqual(opts, [('-a', ''), ('-b', '1'),
                                 ('--alpha', ''), ('--beta', '2')])
 
-        # recognize "-" as an argument
-        opts, args = getopt.gnu_getopt(['-a', '-', '-b', '-'], 'ab:', [])
-        self.assertEqual(args, ['-'])
-        self.assertEqual(opts, [('-a', ''), ('-b', '-')])
-
         # Posix style via +
         opts, args = getopt.gnu_getopt(cmdline, '+ab:', ['alpha', 'beta='])
         self.assertEqual(opts, [('-a', '')])
         self.assertEqual(args, ['arg1', '-b', '1', '--alpha', '--beta=2'])
 
         # Posix style via POSIXLY_CORRECT
-        self.env["POSIXLY_CORRECT"] = "1"
+        os.environ["POSIXLY_CORRECT"] = "1"
         opts, args = getopt.gnu_getopt(cmdline, 'ab:', ['alpha', 'beta='])
         self.assertEqual(opts, [('-a', '')])
         self.assertEqual(args, ['arg1', '-b', '1', '--alpha', '--beta=2'])
@@ -175,9 +173,9 @@ class GetoptTests(unittest.TestCase):
 
     def test_issue4629(self):
         longopts, shortopts = getopt.getopt(['--help='], '', ['help='])
-        self.assertEqual(longopts, [('--help', '')])
+        self.assertEquals(longopts, [('--help', '')])
         longopts, shortopts = getopt.getopt(['--help=x'], '', ['help='])
-        self.assertEqual(longopts, [('--help', 'x')])
+        self.assertEquals(longopts, [('--help', 'x')])
         self.assertRaises(getopt.GetoptError, getopt.getopt, ['--help='], '', ['help'])
 
 def test_main():

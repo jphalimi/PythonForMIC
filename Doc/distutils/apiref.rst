@@ -72,8 +72,8 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
    |                    | be built                       | :class:`distutils.core.Extension`                           |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *classifiers*      | A list of categories for the   | The list of available                                       |
-   |                    | package                        | categorizations is available on `PyPI                       |
-   |                    |                                | <http://pypi.python.org/pypi?:action=list_classifiers>`_.   |
+   |                    | package                        | categorizations is at                                       |
+   |                    |                                | http://pypi.python.org/pypi?:action=list_classifiers.       |
    +--------------------+--------------------------------+-------------------------------------------------------------+
    | *distclass*        | the :class:`Distribution`      | A subclass of                                               |
    |                    | class to use                   | :class:`distutils.core.Distribution`                        |
@@ -115,7 +115,7 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
    args from *script* to :func:`setup`), or  the contents of the config files or
    command-line.
 
-   *script_name* is a file that will be read and run with :func:`exec`.  ``sys.argv[0]``
+   *script_name* is a file that will be run with :func:`execfile` ``sys.argv[0]``
    will be replaced with *script* for the duration of the call.  *script_args* is a
    list of strings; if supplied, ``sys.argv[1:]`` will be replaced by *script_args*
    for the duration  of the call.
@@ -147,11 +147,11 @@ setup script). Indirectly provides the  :class:`distutils.dist.Distribution` and
 In addition, the :mod:`distutils.core` module exposed a number of  classes that
 live elsewhere.
 
-* :class:`~distutils.extension.Extension` from :mod:`distutils.extension`
+* :class:`Extension` from :mod:`distutils.extension`
 
-* :class:`~distutils.cmd.Command` from :mod:`distutils.cmd`
+* :class:`Command` from :mod:`distutils.cmd`
 
-* :class:`~distutils.dist.Distribution` from :mod:`distutils.dist`
+* :class:`Distribution` from :mod:`distutils.dist`
 
 A short description of each of these follows, but see the relevant module for
 the full reference.
@@ -260,11 +260,6 @@ the full reference.
    |                        | ``'objc'``). Will be detected  |                           |
    |                        | from the source extensions if  |                           |
    |                        | not provided.                  |                           |
-   +------------------------+--------------------------------+---------------------------+
-   | *optional*             | specifies that a build failure | a boolean                 |
-   |                        | in the extension should not    |                           |
-   |                        | abort the build process, but   |                           |
-   |                        | simply skip the extension.     |                           |
    +------------------------+--------------------------------+---------------------------+
 
 
@@ -852,6 +847,23 @@ This module provides the EMXCCompiler class, a subclass of
 :class:`UnixCCompiler` that handles the EMX port of the GNU C compiler to OS/2.
 
 
+:mod:`distutils.mwerkscompiler` --- Metrowerks CodeWarrior support
+==================================================================
+
+.. module:: distutils.mwerkscompiler
+   :synopsis: Metrowerks CodeWarrior support
+
+
+Contains :class:`MWerksCompiler`, an implementation of the abstract
+:class:`CCompiler` class for MetroWerks CodeWarrior on the pre-Mac OS X
+Macintosh. Needs work to support CW on Windows or Mac OS X.
+
+.. % \subsection{Utility modules}
+.. %
+.. % The following modules all provide general utility functions. They haven't
+.. % all been documented yet.
+
+
 :mod:`distutils.archive_util` ---  Archiving utilities
 ======================================================
 
@@ -893,7 +905,7 @@ tarballs or zipfiles.
 .. function:: make_zipfile(base_name, base_dir[, verbose=0, dry_run=0])
 
    Create a zip file from all files in and under *base_dir*.  The output zip file
-   will be named *base_name* + :file:`.zip`.  Uses either the  :mod:`zipfile` Python
+   will be named *base_dir* + :file:`.zip`.  Uses either the  :mod:`zipfile` Python
    module (if available) or the InfoZIP :file:`zip`  utility (if installed and
    found on the default search path).  If neither  tool is available, raises
    :exc:`DistutilsExecError`.   Returns the name of the output zip file.
@@ -953,7 +965,7 @@ This module provides functions for operating on directories and trees of
 directories.
 
 
-.. function:: mkpath(name[, mode=0o777, verbose=0, dry_run=0])
+.. function:: mkpath(name[, mode=0777, verbose=0, dry_run=0])
 
    Create a directory and any missing ancestor directories.  If the directory
    already exists (or if *name* is the empty string, which means the current
@@ -964,7 +976,7 @@ directories.
    directories actually created.
 
 
-.. function:: create_tree(base_dir, files[, mode=0o777, verbose=0, dry_run=0])
+.. function:: create_tree(base_dir, files[, mode=0777, verbose=0, dry_run=0])
 
    Create all the empty directories under *base_dir* needed to put *files* there.
    *base_dir* is just the a name of a directory which doesn't necessarily exist
@@ -1316,7 +1328,8 @@ provides the following additional features:
   the "negative alias" of :option:`--verbose`, then :option:`--quiet` on the
   command line sets *verbose* to false.
 
-.. XXX Should be replaced with optparse
+.. XXX Should be replaced with :mod:`optparse`.
+
 
 .. function:: fancy_getopt(options, negative_opt, object, args)
 
@@ -1683,8 +1696,8 @@ lines, and joining lines with backslashes.
 ===================================================================
 
 .. module:: distutils.cmd
-   :synopsis: This module provides the abstract base class Command. This class
-              is subclassed by the modules in the distutils.command subpackage.
+   :synopsis: This module provides the abstract base class Command. This class is subclassed
+              by the modules in the distutils.command  subpackage.
 
 
 This module supplies the abstract base class :class:`Command`.
@@ -1694,82 +1707,18 @@ This module supplies the abstract base class :class:`Command`.
 
    Abstract base class for defining command classes, the "worker bees" of the
    Distutils.  A useful analogy for command classes is to think of them as
-   subroutines with local variables called *options*.  The options are declared
-   in :meth:`initialize_options` and defined (given their final values) in
-   :meth:`finalize_options`, both of which must be defined by every command
-   class.  The distinction between the two is necessary because option values
-   might come from the outside world (command line, config file, ...), and any
-   options dependent on other options must be computed after these outside
-   influences have been processed --- hence :meth:`finalize_options`.  The body
-   of the subroutine, where it does all its work based on the values of its
-   options, is the :meth:`run` method, which must also be implemented by every
-   command class.
+   subroutines with local variables called *options*.  The options are declared in
+   :meth:`initialize_options` and defined (given their final values) in
+   :meth:`finalize_options`, both of which must be defined by every command class.
+   The distinction between the two is necessary because option values might come
+   from the outside world (command line, config file, ...), and any options
+   dependent on other options must be computed after these outside influences have
+   been processed --- hence :meth:`finalize_options`.  The body of the subroutine,
+   where it does all its work based on the values of its options, is the
+   :meth:`run` method, which must also be implemented by every command class.
 
-   The class constructor takes a single argument *dist*, a :class:`Distribution`
+   The class constructor takes a single argument *dist*, a  :class:`Distribution`
    instance.
-
-
-Creating a new Distutils command
-================================
-
-This section outlines the steps to create a new Distutils command.
-
-A new command lives in a module in the :mod:`distutils.command` package. There
-is a sample template in that directory called :file:`command_template`.  Copy
-this file to a new module with the same name as the new command you're
-implementing.  This module should implement a class with the same name as the
-module (and the command).  So, for instance, to create the command
-``peel_banana`` (so that users can run ``setup.py peel_banana``), you'd copy
-:file:`command_template` to :file:`distutils/command/peel_banana.py`, then edit
-it so that it's implementing the class :class:`peel_banana`, a subclass of
-:class:`distutils.cmd.Command`.
-
-Subclasses of :class:`Command` must define the following methods.
-
-.. method:: Command.initialize_options()
-
-   Set default values for all the options that this command supports.  Note that
-   these defaults may be overridden by other commands, by the setup script, by
-   config files, or by the command-line.  Thus, this is not the place to code
-   dependencies between options; generally, :meth:`initialize_options`
-   implementations are just a bunch of ``self.foo = None`` assignments.
-
-
-.. method:: Command.finalize_options()
-
-   Set final values for all the options that this command supports. This is
-   always called as late as possible, ie.  after any option assignments from the
-   command-line or from other commands have been done.  Thus, this is the place
-   to to code option dependencies: if *foo* depends on *bar*, then it is safe to
-   set *foo* from *bar* as long as *foo* still has the same value it was
-   assigned in :meth:`initialize_options`.
-
-
-.. method:: Command.run()
-
-   A command's raison d'etre: carry out the action it exists to perform, controlled
-   by the options initialized in :meth:`initialize_options`, customized by other
-   commands, the setup script, the command-line, and config files, and finalized in
-   :meth:`finalize_options`.  All terminal output and filesystem interaction should
-   be done by :meth:`run`.
-
-
-.. attribute:: Command.sub_commands
-
-   *sub_commands* formalizes the notion of a "family" of commands,
-   e.g. ``install`` as the parent with sub-commands ``install_lib``,
-   ``install_headers``, etc.  The parent of a family of commands defines
-   *sub_commands* as a class attribute; it's a list of 2-tuples ``(command_name,
-   predicate)``, with *command_name* a string and *predicate* a function, a
-   string or ``None``.  *predicate* is a method of the parent command that
-   determines whether the corresponding command is applicable in the current
-   situation.  (E.g. ``install_headers`` is only applicable if we have any C
-   header files to install.)  If *predicate* is ``None``, that command is always
-   applicable.
-
-   *sub_commands* is usually defined at the *end* of a class, because
-   predicates can be methods of the class, so they must already have been
-   defined.  The canonical example is the :command:`install` command.
 
 
 :mod:`distutils.command` --- Individual Distutils commands
@@ -1819,7 +1768,7 @@ Subclasses of :class:`Command` must define the following methods.
 .. module:: distutils.command.bdist_msi
    :synopsis: Build a binary distribution as a Windows MSI file
 
-.. class:: bdist_msi
+.. class:: bdist_msi(Command)
 
    Builds a `Windows Installer`_ (.msi) binary package.
 
@@ -1898,25 +1847,7 @@ Subclasses of :class:`Command` must define the following methods.
    :synopsis: Build the .py/.pyc files of a package
 
 
-.. class:: build_py
-
-.. class:: build_py_2to3
-
-   Alternative implementation of build_py which also runs the
-   2to3 conversion library on each .py file that is going to be
-   installed. To use this in a setup.py file for a distribution
-   that is designed to run with both Python 2.x and 3.x, add::
-
-     try:
-        from distutils.command.build_py import build_py_2to3 as build_py
-     except ImportError:
-        from distutils.command.build_py import build_py
-
-   to your setup.py, and later::
-
-      cmdclass = {'build_py': build_py}
-
-   to the invocation of setup().
+.. % todo
 
 
 :mod:`distutils.command.build_scripts` --- Build the scripts of a package
@@ -2012,15 +1943,61 @@ This is described in more detail in :pep:`301`.
 .. % todo
 
 
-:mod:`distutils.command.check` --- Check the meta-data of a package
-===================================================================
+Creating a new Distutils command
+================================
 
-.. module:: distutils.command.check
-   :synopsis: Check the metadata of a package
+This section outlines the steps to create a new Distutils command.
+
+A new command lives in a module in the :mod:`distutils.command` package. There
+is a sample template in that directory called  :file:`command_template`. Copy
+this file to a new module with the same name as the new command you're
+implementing. This module should implement a class with the same name as the
+module (and the command). So, for instance, to create the command
+``peel_banana`` (so that users can run ``setup.py peel_banana``), you'd copy
+:file:`command_template`  to :file:`distutils/command/peel_banana.py`, then edit
+it so that it's implementing the class :class:`peel_banana`, a subclass of
+:class:`distutils.cmd.Command`.
+
+Subclasses of :class:`Command` must define the following methods.
 
 
-The ``check`` command performs some tests on the meta-data of a package.
-For example, it verifies that all required meta-data are provided as
-the arguments passed to the :func:`setup` function.
+.. method:: Command.initialize_options()
 
-.. % todo
+   Set default values for all the options that this command supports.  Note that
+   these defaults may be overridden by other commands, by the setup script, by
+   config files, or by the command-line.  Thus, this is not the place to code
+   dependencies between options; generally, :meth:`initialize_options`
+   implementations are just a bunch of ``self.foo = None`` assignments.
+
+
+.. method:: Command.finalize_options()
+
+   Set final values for all the options that this command supports. This is
+   always called as late as possible, ie.  after any option assignments from the
+   command-line or from other commands have been done.  Thus, this is the place
+   to to code option dependencies: if *foo* depends on *bar*, then it is safe to
+   set *foo* from *bar* as long as *foo* still has the same value it was
+   assigned in :meth:`initialize_options`.
+
+
+.. method:: Command.run()
+
+   A command's raison d'etre: carry out the action it exists to perform, controlled
+   by the options initialized in :meth:`initialize_options`, customized by other
+   commands, the setup script, the command-line, and config files, and finalized in
+   :meth:`finalize_options`.  All terminal output and filesystem interaction should
+   be done by :meth:`run`.
+
+*sub_commands* formalizes the notion of a "family" of commands, eg. ``install``
+as the parent with sub-commands ``install_lib``, ``install_headers``, etc.  The
+parent of a family of commands defines *sub_commands* as a class attribute; it's
+a list of 2-tuples ``(command_name, predicate)``, with *command_name* a string
+and *predicate* an unbound method, a string or None. *predicate* is a method of
+the parent command that determines whether the corresponding command is
+applicable in the current situation.  (Eg. we ``install_headers`` is only
+applicable if we have any C header files to install.)  If *predicate* is None,
+that command is always applicable.
+
+*sub_commands* is usually defined at the \*end\* of a class, because predicates
+can be unbound methods, so they must already have been defined.  The canonical
+example is the :command:`install` command.

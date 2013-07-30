@@ -95,7 +95,7 @@ month_abbr = _localized_month('%b')
 
 
 def isleap(year):
-    """Return True for leap years, False for non-leap years."""
+    """Return 1 for leap years, 0 for non-leap years."""
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 
@@ -262,7 +262,7 @@ class TextCalendar(Calendar):
         """
         Print a single week (no newline).
         """
-        print(self.formatweek(theweek, width), end=' ')
+        print self.formatweek(theweek, width),
 
     def formatday(self, day, weekday, width):
         """
@@ -309,7 +309,7 @@ class TextCalendar(Calendar):
         """
         Print a month's calendar.
         """
-        print(self.formatmonth(theyear, themonth, w, l), end=' ')
+        print self.formatmonth(theyear, themonth, w, l),
 
     def formatmonth(self, theyear, themonth, w=0, l=0):
         """
@@ -366,7 +366,7 @@ class TextCalendar(Calendar):
 
     def pryear(self, theyear, w=0, l=0, c=6, m=3):
         """Print a year's calendar."""
-        print(self.formatyear(theyear, w, l, c, m))
+        print self.formatyear(theyear, w, l, c, m)
 
 
 class HTMLCalendar(Calendar):
@@ -481,13 +481,13 @@ class HTMLCalendar(Calendar):
         return ''.join(v).encode(encoding, "xmlcharrefreplace")
 
 
-class different_locale:
+class TimeEncoding:
     def __init__(self, locale):
         self.locale = locale
 
     def __enter__(self):
-        self.oldlocale = _locale.getlocale(_locale.LC_TIME)
-        _locale.setlocale(_locale.LC_TIME, self.locale)
+        self.oldlocale = _locale.setlocale(_locale.LC_TIME, self.locale)
+        return _locale.getlocale(_locale.LC_TIME)[1]
 
     def __exit__(self, *args):
         _locale.setlocale(_locale.LC_TIME, self.oldlocale)
@@ -508,17 +508,21 @@ class LocaleTextCalendar(TextCalendar):
         self.locale = locale
 
     def formatweekday(self, day, width):
-        with different_locale(self.locale):
+        with TimeEncoding(self.locale) as encoding:
             if width >= 9:
                 names = day_name
             else:
                 names = day_abbr
             name = names[day]
+            if encoding is not None:
+                name = name.decode(encoding)
             return name[:width].center(width)
 
     def formatmonthname(self, theyear, themonth, width, withyear=True):
-        with different_locale(self.locale):
+        with TimeEncoding(self.locale) as encoding:
             s = month_name[themonth]
+            if encoding is not None:
+                s = s.decode(encoding)
             if withyear:
                 s = "%s %r" % (s, theyear)
             return s.center(width)
@@ -538,13 +542,17 @@ class LocaleHTMLCalendar(HTMLCalendar):
         self.locale = locale
 
     def formatweekday(self, day):
-        with different_locale(self.locale):
+        with TimeEncoding(self.locale) as encoding:
             s = day_abbr[day]
+            if encoding is not None:
+                s = s.decode(encoding)
             return '<th class="%s">%s</th>' % (self.cssclasses[day], s)
 
     def formatmonthname(self, theyear, themonth, withyear=True):
-        with different_locale(self.locale):
+        with TimeEncoding(self.locale) as encoding:
             s = month_name[themonth]
+            if encoding is not None:
+                s = s.decode(encoding)
             if withyear:
                 s = '%s %s' % (s, theyear)
             return '<tr><th colspan="7" class="month">%s</th></tr>' % s
@@ -556,6 +564,10 @@ c = TextCalendar()
 firstweekday = c.getfirstweekday
 
 def setfirstweekday(firstweekday):
+    try:
+        firstweekday.__index__
+    except AttributeError:
+        raise IllegalWeekdayError(firstweekday)
     if not MONDAY <= firstweekday <= SUNDAY:
         raise IllegalWeekdayError(firstweekday)
     c.firstweekday = firstweekday
@@ -577,7 +589,7 @@ _spacing = 6                # Number of spaces between columns
 
 def format(cols, colwidth=_colwidth, spacing=_spacing):
     """Prints multi-column formatting for year calendars"""
-    print(formatstring(cols, colwidth, spacing))
+    print formatstring(cols, colwidth, spacing)
 
 
 def formatstring(cols, colwidth=_colwidth, spacing=_spacing):
@@ -636,7 +648,7 @@ def main(args):
     parser.add_option(
         "-e", "--encoding",
         dest="encoding", default=None,
-        help="Encoding to use for output."
+        help="Encoding to use for output"
     )
     parser.add_option(
         "-t", "--type",
@@ -662,11 +674,10 @@ def main(args):
         if encoding is None:
             encoding = sys.getdefaultencoding()
         optdict = dict(encoding=encoding, css=options.css)
-        write = sys.stdout.buffer.write
         if len(args) == 1:
-            write(cal.formatyearpage(datetime.date.today().year, **optdict))
+            print cal.formatyearpage(datetime.date.today().year, **optdict)
         elif len(args) == 2:
-            write(cal.formatyearpage(int(args[1]), **optdict))
+            print cal.formatyearpage(int(args[1]), **optdict)
         else:
             parser.error("incorrect number of arguments")
             sys.exit(1)
@@ -688,11 +699,9 @@ def main(args):
         else:
             parser.error("incorrect number of arguments")
             sys.exit(1)
-        write = sys.stdout.write
         if options.encoding:
             result = result.encode(options.encoding)
-            write = sys.stdout.buffer.write
-        write(result)
+        print result
 
 
 if __name__ == "__main__":

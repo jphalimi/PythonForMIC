@@ -22,7 +22,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories="..\..\..\tcltk\include,..\..\Include,..\..\PC"
-				PreprocessorDefinitions="Py_BUILD_CORE_MODULE;NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
 				StringPooling="TRUE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="TRUE"
@@ -35,7 +35,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib odbccp32.lib"
+				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib"
 				OutputFile="./_tkinter.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -78,7 +78,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="..\..\..\tcltk\include,..\..\Include,..\..\PC"
-				PreprocessorDefinitions="Py_BUILD_CORE_MODULE;_DEBUG;WIN32;_WINDOWS;WITH_APPINIT"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;WITH_APPINIT"
 				RuntimeLibrary="3"
 				UsePrecompiledHeader="2"
 				WarningLevel="3"
@@ -89,7 +89,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib odbccp32.lib"
+				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib"
 				OutputFile="./_tkinter_d.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -134,7 +134,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories="..\..\..\tcltk\include,..\..\Include,..\..\PC"
-				PreprocessorDefinitions="Py_BUILD_CORE_MODULE;NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
 				StringPooling="TRUE"
 				BasicRuntimeChecks="0"
 				RuntimeLibrary="2"
@@ -151,7 +151,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /MACHINE:IA64 /USELINK:MS_SDK"
-				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib odbccp32.lib"
+				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib"
 				OutputFile="./_tkinter.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
@@ -196,7 +196,7 @@
 				Optimization="2"
 				InlineFunctionExpansion="1"
 				AdditionalIncludeDirectories="..\..\..\tcltk\include,..\..\Include,..\..\PC"
-				PreprocessorDefinitions="Py_BUILD_CORE_MODULE;NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
+				PreprocessorDefinitions="NDEBUG;WIN32;_WINDOWS;WITH_APPINIT"
 				StringPooling="TRUE"
 				BasicRuntimeChecks="0"
 				RuntimeLibrary="2"
@@ -213,7 +213,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /MACHINE:AMD64 /USELINK:MS_SDK"
-				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib odbccp32.lib"
+				AdditionalDependencies="..\..\..\tcltk\lib\tk84.lib ..\..\..\tcltk\lib\tcl84.lib"
 				OutputFile="./_tkinter.pyd"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"

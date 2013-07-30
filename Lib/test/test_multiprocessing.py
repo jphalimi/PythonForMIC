@@ -1,61 +1,54 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 #
 # Unit tests for the multiprocessing package
 #
 
 import unittest
-import queue as pyqueue
+import threading
+import Queue
 import time
-import io
 import sys
 import os
 import gc
-import errno
 import signal
 import array
+import copy
 import socket
 import random
 import logging
-import test.support
+from StringIO import StringIO
+from test import test_support
 
 
-# Skip tests if _multiprocessing wasn't built.
-_multiprocessing = test.support.import_module('_multiprocessing')
-# Skip tests if sem_open implementation is broken.
-test.support.import_module('multiprocessing.synchronize')
-# import threading after _multiprocessing to raise a more revelant error
-# message: "No module named _multiprocessing". _multiprocessing is not compiled
-# without thread support.
-import threading
+# Work around broken sem_open implementations
+try:
+    import multiprocessing.synchronize
+except ImportError, e:
+    from test.test_support import TestSkipped
+    raise TestSkipped(e)
 
 import multiprocessing.dummy
 import multiprocessing.connection
 import multiprocessing.managers
 import multiprocessing.heap
 import multiprocessing.pool
+import _multiprocessing
 
 from multiprocessing import util
 
-try:
-    from multiprocessing.sharedctypes import Value, copy
-    HAS_SHAREDCTYPES = True
-except ImportError:
-    HAS_SHAREDCTYPES = False
-
 #
 #
 #
 
-def latin(s):
-    return s.encode('latin')
+latin = str
 
 #
 # Constants
 #
 
 LOG_LEVEL = util.SUBWARNING
-#LOG_LEVEL = logging.DEBUG
+#LOG_LEVEL = logging.WARNING
 
 DELTA = 0.1
 CHECK_TIMINGS = False     # making true makes tests take a lot longer
@@ -71,16 +64,6 @@ HAVE_GETVALUE = not getattr(_multiprocessing,
                             'HAVE_BROKEN_SEM_GETVALUE', False)
 
 WIN32 = (sys.platform == "win32")
-
-#
-# Some tests require ctypes
-#
-
-try:
-    from ctypes import Structure, c_int, c_double
-except ImportError:
-    Structure = object
-    c_int = c_double = None
 
 #
 # Creates a wrapper for a function which records the time it takes to finish
@@ -119,13 +102,6 @@ class BaseTestCase(object):
         else:
             return self.assertEqual(value, res)
 
-    # For the sanity of Windows users, rather than crashing or freezing in
-    # multiple ways.
-    def __reduce__(self, *args):
-        raise NotImplementedError("shouldn't try to pickle a test case")
-
-    __reduce_ex__ = __reduce__
-
 #
 # Return the value of a semaphore
 #
@@ -159,18 +135,17 @@ class _TestProcess(BaseTestCase):
 
         self.assertTrue(current.is_alive())
         self.assertTrue(not current.daemon)
-        self.assertIsInstance(authkey, bytes)
+        self.assertTrue(isinstance(authkey, bytes))
         self.assertTrue(len(authkey) > 0)
         self.assertEqual(current.ident, os.getpid())
         self.assertEqual(current.exitcode, None)
 
-    @classmethod
-    def _test(cls, q, *args, **kwds):
-        current = cls.current_process()
+    def _test(self, q, *args, **kwds):
+        current = self.current_process()
         q.put(args)
         q.put(kwds)
         q.put(current.name)
-        if cls.TYPE != 'threads':
+        if self.TYPE != 'threads':
             q.put(bytes(current.authkey))
             q.put(current.pid)
 
@@ -187,34 +162,33 @@ class _TestProcess(BaseTestCase):
         current = self.current_process()
 
         if self.TYPE != 'threads':
-            self.assertEqual(p.authkey, current.authkey)
-        self.assertEqual(p.is_alive(), False)
-        self.assertEqual(p.daemon, True)
-        self.assertNotIn(p, self.active_children())
+            self.assertEquals(p.authkey, current.authkey)
+        self.assertEquals(p.is_alive(), False)
+        self.assertEquals(p.daemon, True)
+        self.assertTrue(p not in self.active_children())
         self.assertTrue(type(self.active_children()) is list)
         self.assertEqual(p.exitcode, None)
 
         p.start()
 
-        self.assertEqual(p.exitcode, None)
-        self.assertEqual(p.is_alive(), True)
-        self.assertIn(p, self.active_children())
+        self.assertEquals(p.exitcode, None)
+        self.assertEquals(p.is_alive(), True)
+        self.assertTrue(p in self.active_children())
 
-        self.assertEqual(q.get(), args[1:])
-        self.assertEqual(q.get(), kwargs)
-        self.assertEqual(q.get(), p.name)
+        self.assertEquals(q.get(), args[1:])
+        self.assertEquals(q.get(), kwargs)
+        self.assertEquals(q.get(), p.name)
         if self.TYPE != 'threads':
-            self.assertEqual(q.get(), current.authkey)
-            self.assertEqual(q.get(), p.pid)
+            self.assertEquals(q.get(), current.authkey)
+            self.assertEquals(q.get(), p.pid)
 
         p.join()
 
-        self.assertEqual(p.exitcode, 0)
-        self.assertEqual(p.is_alive(), False)
-        self.assertNotIn(p, self.active_children())
+        self.assertEquals(p.exitcode, 0)
+        self.assertEquals(p.is_alive(), False)
+        self.assertTrue(p not in self.active_children())
 
-    @classmethod
-    def _test_terminate(cls):
+    def _test_terminate(self):
         time.sleep(1000)
 
     def test_terminate(self):
@@ -226,7 +200,7 @@ class _TestProcess(BaseTestCase):
         p.start()
 
         self.assertEqual(p.is_alive(), True)
-        self.assertIn(p, self.active_children())
+        self.assertTrue(p in self.active_children())
         self.assertEqual(p.exitcode, None)
 
         p.terminate()
@@ -236,7 +210,7 @@ class _TestProcess(BaseTestCase):
         self.assertTimingAlmostEqual(join.elapsed, 0.0)
 
         self.assertEqual(p.is_alive(), False)
-        self.assertNotIn(p, self.active_children())
+        self.assertTrue(p not in self.active_children())
 
         p.join()
 
@@ -255,22 +229,21 @@ class _TestProcess(BaseTestCase):
         self.assertEqual(type(self.active_children()), list)
 
         p = self.Process(target=time.sleep, args=(DELTA,))
-        self.assertNotIn(p, self.active_children())
+        self.assertTrue(p not in self.active_children())
 
         p.start()
-        self.assertIn(p, self.active_children())
+        self.assertTrue(p in self.active_children())
 
         p.join()
-        self.assertNotIn(p, self.active_children())
+        self.assertTrue(p not in self.active_children())
 
-    @classmethod
-    def _test_recursion(cls, wconn, id):
+    def _test_recursion(self, wconn, id):
         from multiprocessing import forking
         wconn.send(id)
         if len(id) < 2:
             for i in range(2):
-                p = cls.Process(
-                    target=cls._test_recursion, args=(wconn, id+[i])
+                p = self.Process(
+                    target=self._test_recursion, args=(wconn, id+[i])
                     )
                 p.start()
                 p.join()
@@ -353,8 +326,7 @@ def queue_full(q, maxsize):
 class _TestQueue(BaseTestCase):
 
 
-    @classmethod
-    def _test_put(cls, queue, child_can_start, parent_can_continue):
+    def _test_put(self, queue, child_can_start, parent_can_continue):
         child_can_start.wait()
         for i in range(6):
             queue.get()
@@ -392,22 +364,22 @@ class _TestQueue(BaseTestCase):
         put = TimingWrapper(queue.put)
         put_nowait = TimingWrapper(queue.put_nowait)
 
-        self.assertRaises(pyqueue.Full, put, 7, False)
+        self.assertRaises(Queue.Full, put, 7, False)
         self.assertTimingAlmostEqual(put.elapsed, 0)
 
-        self.assertRaises(pyqueue.Full, put, 7, False, None)
+        self.assertRaises(Queue.Full, put, 7, False, None)
         self.assertTimingAlmostEqual(put.elapsed, 0)
 
-        self.assertRaises(pyqueue.Full, put_nowait, 7)
+        self.assertRaises(Queue.Full, put_nowait, 7)
         self.assertTimingAlmostEqual(put_nowait.elapsed, 0)
 
-        self.assertRaises(pyqueue.Full, put, 7, True, TIMEOUT1)
+        self.assertRaises(Queue.Full, put, 7, True, TIMEOUT1)
         self.assertTimingAlmostEqual(put.elapsed, TIMEOUT1)
 
-        self.assertRaises(pyqueue.Full, put, 7, False, TIMEOUT2)
+        self.assertRaises(Queue.Full, put, 7, False, TIMEOUT2)
         self.assertTimingAlmostEqual(put.elapsed, 0)
 
-        self.assertRaises(pyqueue.Full, put, 7, True, timeout=TIMEOUT3)
+        self.assertRaises(Queue.Full, put, 7, True, timeout=TIMEOUT3)
         self.assertTimingAlmostEqual(put.elapsed, TIMEOUT3)
 
         child_can_start.set()
@@ -418,8 +390,7 @@ class _TestQueue(BaseTestCase):
 
         proc.join()
 
-    @classmethod
-    def _test_get(cls, queue, child_can_start, parent_can_continue):
+    def _test_get(self, queue, child_can_start, parent_can_continue):
         child_can_start.wait()
         #queue.put(1)
         queue.put(2)
@@ -460,28 +431,27 @@ class _TestQueue(BaseTestCase):
         get = TimingWrapper(queue.get)
         get_nowait = TimingWrapper(queue.get_nowait)
 
-        self.assertRaises(pyqueue.Empty, get, False)
+        self.assertRaises(Queue.Empty, get, False)
         self.assertTimingAlmostEqual(get.elapsed, 0)
 
-        self.assertRaises(pyqueue.Empty, get, False, None)
+        self.assertRaises(Queue.Empty, get, False, None)
         self.assertTimingAlmostEqual(get.elapsed, 0)
 
-        self.assertRaises(pyqueue.Empty, get_nowait)
+        self.assertRaises(Queue.Empty, get_nowait)
         self.assertTimingAlmostEqual(get_nowait.elapsed, 0)
 
-        self.assertRaises(pyqueue.Empty, get, True, TIMEOUT1)
+        self.assertRaises(Queue.Empty, get, True, TIMEOUT1)
         self.assertTimingAlmostEqual(get.elapsed, TIMEOUT1)
 
-        self.assertRaises(pyqueue.Empty, get, False, TIMEOUT2)
+        self.assertRaises(Queue.Empty, get, False, TIMEOUT2)
         self.assertTimingAlmostEqual(get.elapsed, 0)
 
-        self.assertRaises(pyqueue.Empty, get, timeout=TIMEOUT3)
+        self.assertRaises(Queue.Empty, get, timeout=TIMEOUT3)
         self.assertTimingAlmostEqual(get.elapsed, TIMEOUT3)
 
         proc.join()
 
-    @classmethod
-    def _test_fork(cls, queue):
+    def _test_fork(self, queue):
         for i in range(10, 20):
             queue.put(i)
         # note that at this point the items may only be buffered, so the
@@ -510,7 +480,7 @@ class _TestQueue(BaseTestCase):
         # check that all expected items are in the queue
         for i in range(20):
             self.assertEqual(queue.get(), i)
-        self.assertRaises(pyqueue.Empty, queue.get, False)
+        self.assertRaises(Queue.Empty, queue.get, False)
 
         p.join()
 
@@ -529,8 +499,7 @@ class _TestQueue(BaseTestCase):
         q.get()
         self.assertEqual(q.qsize(), 0)
 
-    @classmethod
-    def _test_task_done(cls, q):
+    def _test_task_done(self, q):
         for obj in iter(q.get, None):
             time.sleep(DELTA)
             q.task_done()
@@ -539,15 +508,15 @@ class _TestQueue(BaseTestCase):
         queue = self.JoinableQueue()
 
         if sys.version_info < (2, 5) and not hasattr(queue, 'task_done'):
-            self.skipTest("requires 'queue.task_done()' method")
+            return
 
         workers = [self.Process(target=self._test_task_done, args=(queue,))
-                   for i in range(4)]
+                   for i in xrange(4)]
 
         for p in workers:
             p.start()
 
-        for i in range(10):
+        for i in xrange(10):
             queue.put(i)
 
         queue.join()
@@ -642,8 +611,7 @@ class _TestSemaphore(BaseTestCase):
 
 class _TestCondition(BaseTestCase):
 
-    @classmethod
-    def f(cls, cond, sleeping, woken, timeout=None):
+    def f(self, cond, sleeping, woken, timeout=None):
         cond.acquire()
         sleeping.release()
         cond.wait(timeout)
@@ -722,11 +690,11 @@ class _TestCondition(BaseTestCase):
             t.start()
 
         # wait for them all to sleep
-        for i in range(6):
+        for i in xrange(6):
             sleeping.acquire()
 
         # check they have all timed out
-        for i in range(6):
+        for i in xrange(6):
             woken.acquire()
         self.assertReturnsIfImplemented(0, get_value, woken)
 
@@ -744,7 +712,7 @@ class _TestCondition(BaseTestCase):
             t.start()
 
         # wait for them to all sleep
-        for i in range(6):
+        for i in xrange(6):
             sleeping.acquire()
 
         # check no process/thread has woken up
@@ -757,13 +725,7 @@ class _TestCondition(BaseTestCase):
         cond.release()
 
         # check they have all woken
-        for i in range(10):
-            try:
-                if get_value(woken) == 6:
-                    break
-            except NotImplementedError:
-                break
-            time.sleep(DELTA)
+        time.sleep(DELTA)
         self.assertReturnsIfImplemented(6, get_value, woken)
 
         # check state is not mucked up
@@ -775,14 +737,13 @@ class _TestCondition(BaseTestCase):
         cond.acquire()
         res = wait(TIMEOUT1)
         cond.release()
-        self.assertEqual(res, False)
+        self.assertEqual(res, None)
         self.assertTimingAlmostEqual(wait.elapsed, TIMEOUT1)
 
 
 class _TestEvent(BaseTestCase):
 
-    @classmethod
-    def _test_event(cls, event):
+    def _test_event(self, event):
         time.sleep(TIMEOUT2)
         event.set()
 
@@ -790,24 +751,22 @@ class _TestEvent(BaseTestCase):
         event = self.Event()
         wait = TimingWrapper(event.wait)
 
-        # Removed temporarily, due to API shear, this does not
+        # Removed temporaily, due to API shear, this does not
         # work with threading._Event objects. is_set == isSet
-        self.assertEqual(event.is_set(), False)
+        #self.assertEqual(event.is_set(), False)
 
-        # Removed, threading.Event.wait() will return the value of the __flag
-        # instead of None. API Shear with the semaphore backed mp.Event
-        self.assertEqual(wait(0.0), False)
+        self.assertEqual(wait(0.0), None)
         self.assertTimingAlmostEqual(wait.elapsed, 0.0)
-        self.assertEqual(wait(TIMEOUT1), False)
+        self.assertEqual(wait(TIMEOUT1), None)
         self.assertTimingAlmostEqual(wait.elapsed, TIMEOUT1)
 
         event.set()
 
         # See note above on the API differences
-        self.assertEqual(event.is_set(), True)
-        self.assertEqual(wait(), True)
+        # self.assertEqual(event.is_set(), True)
+        self.assertEqual(wait(), None)
         self.assertTimingAlmostEqual(wait.elapsed, 0.0)
-        self.assertEqual(wait(TIMEOUT1), True)
+        self.assertEqual(wait(TIMEOUT1), None)
         self.assertTimingAlmostEqual(wait.elapsed, 0.0)
         # self.assertEqual(event.is_set(), True)
 
@@ -816,15 +775,13 @@ class _TestEvent(BaseTestCase):
         #self.assertEqual(event.is_set(), False)
 
         self.Process(target=self._test_event, args=(event,)).start()
-        self.assertEqual(wait(), True)
+        self.assertEqual(wait(), None)
 
 #
 #
 #
 
 class _TestValue(BaseTestCase):
-
-    ALLOWED_TYPES = ('processes',)
 
     codes_values = [
         ('i', 4343, 24234),
@@ -833,17 +790,15 @@ class _TestValue(BaseTestCase):
         ('c', latin('x'), latin('y'))
         ]
 
-    def setUp(self):
-        if not HAS_SHAREDCTYPES:
-            self.skipTest("requires multiprocessing.sharedctypes")
-
-    @classmethod
-    def _test(cls, values):
-        for sv, cv in zip(values, cls.codes_values):
+    def _test(self, values):
+        for sv, cv in zip(values, self.codes_values):
             sv.value = cv[2]
 
 
     def test_value(self, raw=False):
+        if self.TYPE != 'processes':
+            return
+
         if raw:
             values = [self.RawValue(code, value)
                       for code, value, _ in self.codes_values]
@@ -865,6 +820,9 @@ class _TestValue(BaseTestCase):
         self.test_value(raw=True)
 
     def test_getobj_getlock(self):
+        if self.TYPE != 'processes':
+            return
+
         val1 = self.Value('i', 5)
         lock1 = val1.get_lock()
         obj1 = val1.get_obj()
@@ -892,15 +850,14 @@ class _TestValue(BaseTestCase):
 
 class _TestArray(BaseTestCase):
 
-    ALLOWED_TYPES = ('processes',)
-
-    @classmethod
-    def f(cls, seq):
+    def f(self, seq):
         for i in range(1, len(seq)):
             seq[i] += seq[i-1]
 
-    @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_array(self, raw=False):
+        if self.TYPE != 'processes':
+            return
+
         seq = [680, 626, 934, 821, 150, 233, 548, 982, 714, 831]
         if raw:
             arr = self.RawArray('i', seq)
@@ -923,37 +880,23 @@ class _TestArray(BaseTestCase):
 
         self.assertEqual(list(arr[:]), seq)
 
-    @unittest.skipIf(c_int is None, "requires _ctypes")
-    def test_array_from_size(self):
-        size = 10
-        # Test for zeroing (see issue #11675).
-        # The repetition below strengthens the test by increasing the chances
-        # of previously allocated non-zero memory being used for the new array
-        # on the 2nd and 3rd loops.
-        for _ in range(3):
-            arr = self.Array('i', size)
-            self.assertEqual(len(arr), size)
-            self.assertEqual(list(arr), [0] * size)
-            arr[:] = range(10)
-            self.assertEqual(list(arr), list(range(10)))
-            del arr
-
-    @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_rawarray(self):
         self.test_array(raw=True)
 
-    @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_getobj_getlock_obj(self):
-        arr1 = self.Array('i', list(range(10)))
+        if self.TYPE != 'processes':
+            return
+
+        arr1 = self.Array('i', range(10))
         lock1 = arr1.get_lock()
         obj1 = arr1.get_obj()
 
-        arr2 = self.Array('i', list(range(10)), lock=None)
+        arr2 = self.Array('i', range(10), lock=None)
         lock2 = arr2.get_lock()
         obj2 = arr2.get_obj()
 
         lock = self.Lock()
-        arr3 = self.Array('i', list(range(10)), lock=lock)
+        arr3 = self.Array('i', range(10), lock=lock)
         lock3 = arr3.get_lock()
         obj3 = arr3.get_obj()
         self.assertEqual(lock, lock3)
@@ -977,14 +920,14 @@ class _TestContainers(BaseTestCase):
     ALLOWED_TYPES = ('manager',)
 
     def test_list(self):
-        a = self.list(list(range(10)))
-        self.assertEqual(a[:], list(range(10)))
+        a = self.list(range(10))
+        self.assertEqual(a[:], range(10))
 
         b = self.list()
         self.assertEqual(b[:], [])
 
-        b.extend(list(range(5)))
-        self.assertEqual(b[:], list(range(5)))
+        b.extend(range(5))
+        self.assertEqual(b[:], range(5))
 
         self.assertEqual(b[2], 2)
         self.assertEqual(b[2:10], [2,3,4])
@@ -994,7 +937,7 @@ class _TestContainers(BaseTestCase):
 
         self.assertEqual(b + [5, 6], [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 5, 6])
 
-        self.assertEqual(a[:], list(range(10)))
+        self.assertEqual(a[:], range(10))
 
         d = [a, b]
         e = self.list(d)
@@ -1009,7 +952,7 @@ class _TestContainers(BaseTestCase):
 
     def test_dict(self):
         d = self.dict()
-        indices = list(range(65, 70))
+        indices = range(65, 70)
         for i in indices:
             d[i] = chr(i)
         self.assertEqual(d.copy(), dict((i, chr(i)) for i in indices))
@@ -1035,7 +978,6 @@ class _TestContainers(BaseTestCase):
 def sqr(x, wait=0.0):
     time.sleep(wait)
     return x*x
-
 class _TestPool(BaseTestCase):
 
     def test_apply(self):
@@ -1045,15 +987,9 @@ class _TestPool(BaseTestCase):
 
     def test_map(self):
         pmap = self.pool.map
-        self.assertEqual(pmap(sqr, list(range(10))), list(map(sqr, list(range(10)))))
-        self.assertEqual(pmap(sqr, list(range(100)), chunksize=20),
-                         list(map(sqr, list(range(100)))))
-
-    def test_map_chunksize(self):
-        try:
-            self.pool.map_async(sqr, [], chunksize=1).get(timeout=TIMEOUT1)
-        except multiprocessing.TimeoutError:
-            self.fail("pool.map_async with chunksize stalled on null list")
+        self.assertEqual(pmap(sqr, range(10)), map(sqr, range(10)))
+        self.assertEqual(pmap(sqr, range(100), chunksize=20),
+                         map(sqr, range(100)))
 
     def test_async(self):
         res = self.pool.apply_async(sqr, (7, TIMEOUT1,))
@@ -1068,30 +1004,27 @@ class _TestPool(BaseTestCase):
         self.assertTimingAlmostEqual(get.elapsed, TIMEOUT2)
 
     def test_imap(self):
-        it = self.pool.imap(sqr, list(range(10)))
-        self.assertEqual(list(it), list(map(sqr, list(range(10)))))
+        it = self.pool.imap(sqr, range(10))
+        self.assertEqual(list(it), map(sqr, range(10)))
 
-        it = self.pool.imap(sqr, list(range(10)))
+        it = self.pool.imap(sqr, range(10))
         for i in range(10):
-            self.assertEqual(next(it), i*i)
-        self.assertRaises(StopIteration, it.__next__)
+            self.assertEqual(it.next(), i*i)
+        self.assertRaises(StopIteration, it.next)
 
-        it = self.pool.imap(sqr, list(range(1000)), chunksize=100)
+        it = self.pool.imap(sqr, range(1000), chunksize=100)
         for i in range(1000):
-            self.assertEqual(next(it), i*i)
-        self.assertRaises(StopIteration, it.__next__)
+            self.assertEqual(it.next(), i*i)
+        self.assertRaises(StopIteration, it.next)
 
     def test_imap_unordered(self):
-        it = self.pool.imap_unordered(sqr, list(range(1000)))
-        self.assertEqual(sorted(it), list(map(sqr, list(range(1000)))))
+        it = self.pool.imap_unordered(sqr, range(1000))
+        self.assertEqual(sorted(it), map(sqr, range(1000)))
 
-        it = self.pool.imap_unordered(sqr, list(range(1000)), chunksize=53)
-        self.assertEqual(sorted(it), list(map(sqr, list(range(1000)))))
+        it = self.pool.imap_unordered(sqr, range(1000), chunksize=53)
+        self.assertEqual(sorted(it), map(sqr, range(1000)))
 
     def test_make_pool(self):
-        self.assertRaises(ValueError, multiprocessing.Pool, -1)
-        self.assertRaises(ValueError, multiprocessing.Pool, 0)
-
         p = multiprocessing.Pool(3)
         self.assertEqual(3, len(p._pool))
         p.close()
@@ -1113,86 +1046,7 @@ class _TestPool(BaseTestCase):
         self.pool.terminate()
         join = TimingWrapper(self.pool.join)
         join()
-        self.assertLess(join.elapsed, 0.5)
-
-def raising():
-    raise KeyError("key")
-
-def unpickleable_result():
-    return lambda: 42
-
-class _TestPoolWorkerErrors(BaseTestCase):
-    ALLOWED_TYPES = ('processes', )
-
-    def test_async_error_callback(self):
-        p = multiprocessing.Pool(2)
-
-        scratchpad = [None]
-        def errback(exc):
-            scratchpad[0] = exc
-
-        res = p.apply_async(raising, error_callback=errback)
-        self.assertRaises(KeyError, res.get)
-        self.assertTrue(scratchpad[0])
-        self.assertIsInstance(scratchpad[0], KeyError)
-
-        p.close()
-        p.join()
-
-    def test_unpickleable_result(self):
-        from multiprocessing.pool import MaybeEncodingError
-        p = multiprocessing.Pool(2)
-
-        # Make sure we don't lose pool processes because of encoding errors.
-        for iteration in range(20):
-
-            scratchpad = [None]
-            def errback(exc):
-                scratchpad[0] = exc
-
-            res = p.apply_async(unpickleable_result, error_callback=errback)
-            self.assertRaises(MaybeEncodingError, res.get)
-            wrapped = scratchpad[0]
-            self.assertTrue(wrapped)
-            self.assertIsInstance(scratchpad[0], MaybeEncodingError)
-            self.assertIsNotNone(wrapped.exc)
-            self.assertIsNotNone(wrapped.value)
-
-        p.close()
-        p.join()
-
-class _TestPoolWorkerLifetime(BaseTestCase):
-    ALLOWED_TYPES = ('processes', )
-
-    def test_pool_worker_lifetime(self):
-        p = multiprocessing.Pool(3, maxtasksperchild=10)
-        self.assertEqual(3, len(p._pool))
-        origworkerpids = [w.pid for w in p._pool]
-        # Run many tasks so each worker gets replaced (hopefully)
-        results = []
-        for i in range(100):
-            results.append(p.apply_async(sqr, (i, )))
-        # Fetch the results and verify we got the right answers,
-        # also ensuring all the tasks have completed.
-        for (j, res) in enumerate(results):
-            self.assertEqual(res.get(), sqr(j))
-        # Refill the pool
-        p._repopulate_pool()
-        # Wait until all workers are alive
-        # (countdown * DELTA = 5 seconds max startup process time)
-        countdown = 50
-        while countdown and not all(w.is_alive() for w in p._pool):
-            countdown -= 1
-            time.sleep(DELTA)
-        finalworkerpids = [w.pid for w in p._pool]
-        # All pids should be assigned.  See issue #7805.
-        self.assertNotIn(None, origworkerpids)
-        self.assertNotIn(None, finalworkerpids)
-        # Finally, check that the worker pids have changed
-        self.assertNotEqual(sorted(origworkerpids), sorted(finalworkerpids))
-        p.close()
-        p.join()
-
+        self.assertTrue(join.elapsed < 0.2)
 #
 # Test that manager has expected number of shared objects left
 #
@@ -1209,10 +1063,8 @@ class _TestZZZNumberOfObjects(BaseTestCase):
         multiprocessing.active_children()  # discard dead process objs
         gc.collect()                       # do garbage collection
         refs = self.manager._number_of_objects()
-        debug_info = self.manager._debug_info()
         if refs != EXPECTED_NUMBER:
-            print(self.manager._debug_info())
-            print(debug_info)
+            print self.manager._debug_info()
 
         self.assertEqual(refs, EXPECTED_NUMBER)
 
@@ -1231,13 +1083,15 @@ class FooBar(object):
         return '_h()'
 
 def baz():
-    for i in range(10):
+    for i in xrange(10):
         yield i*i
 
 class IteratorProxy(BaseProxy):
-    _exposed_ = ('__next__',)
+    _exposed_ = ('next', '__next__')
     def __iter__(self):
         return self
+    def next(self):
+        return self._callmethod('next')
     def __next__(self):
         return self._callmethod('__next__')
 
@@ -1285,7 +1139,7 @@ class _TestMyManager(BaseTestCase):
 # Test of connecting to a remote server and using xmlrpclib for serialization
 #
 
-_queue = pyqueue.Queue()
+_queue = Queue.Queue()
 def get_queue():
     return _queue
 
@@ -1304,8 +1158,7 @@ class _TestRemoteManager(BaseTestCase):
 
     ALLOWED_TYPES = ('manager',)
 
-    @classmethod
-    def _putter(cls, address, authkey):
+    def _putter(self, address, authkey):
         manager = QueueManager2(
             address=address, authkey=authkey, serializer=SERIALIZER
             )
@@ -1343,8 +1196,7 @@ class _TestRemoteManager(BaseTestCase):
 
 class _TestManagerRestart(BaseTestCase):
 
-    @classmethod
-    def _putter(cls, address, authkey):
+    def _putter(self, address, authkey):
         manager = QueueManager(
             address=address, authkey=authkey, serializer=SERIALIZER)
         manager.connect()
@@ -1355,11 +1207,7 @@ class _TestManagerRestart(BaseTestCase):
         authkey = os.urandom(32)
         manager = QueueManager(
             address=('localhost', 0), authkey=authkey, serializer=SERIALIZER)
-        srvr = manager.get_server()
-        addr = srvr.address
-        # Close the connection.Listener socket which gets opened as a part
-        # of manager.get_server(). It's not needed for the test.
-        srvr.listener.close()
+        addr = manager.get_server().address
         manager.start()
 
         p = self.Process(target=self._putter, args=(manager.address, authkey))
@@ -1370,16 +1218,7 @@ class _TestManagerRestart(BaseTestCase):
         manager.shutdown()
         manager = QueueManager(
             address=addr, authkey=authkey, serializer=SERIALIZER)
-        try:
-            manager.start()
-        except IOError as e:
-            if e.errno != errno.EADDRINUSE:
-                raise
-            # Retry after some time, in case the old socket was lingering
-            # (sporadic failure on buildbots)
-            time.sleep(1.0)
-            manager = QueueManager(
-                address=addr, authkey=authkey, serializer=SERIALIZER)
+        manager.start()
         manager.shutdown()
 
 #
@@ -1392,8 +1231,7 @@ class _TestConnection(BaseTestCase):
 
     ALLOWED_TYPES = ('processes', 'threads')
 
-    @classmethod
-    def _echo(cls, conn):
+    def _echo(self, conn):
         for msg in iter(conn.recv_bytes, SENTINEL):
             conn.send_bytes(msg)
         conn.close()
@@ -1408,7 +1246,7 @@ class _TestConnection(BaseTestCase):
         seq = [1, 2.25, None]
         msg = latin('hello world')
         longmsg = msg * 10
-        arr = array.array('i', list(range(4)))
+        arr = array.array('i', range(4))
 
         if self.TYPE == 'processes':
             self.assertEqual(type(conn.fileno()), int)
@@ -1438,7 +1276,7 @@ class _TestConnection(BaseTestCase):
             self.assertEqual(conn.send_bytes(longmsg), None)
             try:
                 res = conn.recv_bytes_into(buffer)
-            except multiprocessing.BufferTooShort as e:
+            except multiprocessing.BufferTooShort, e:
                 self.assertEqual(e.args, (longmsg,))
             else:
                 self.fail('expected BufferTooShort, got %s' % res)
@@ -1542,9 +1380,8 @@ class _TestListenerClient(BaseTestCase):
 
     ALLOWED_TYPES = ('processes', 'threads')
 
-    @classmethod
-    def _test(cls, address):
-        conn = cls.connection.Client(address)
+    def _test(self, address):
+        conn = self.connection.Client(address)
         conn.send('hello')
         conn.close()
 
@@ -1658,7 +1495,7 @@ class _TestHeap(BaseTestCase):
         blocks = []
 
         # create and destroy lots of blocks of different sizes
-        for i in range(iterations):
+        for i in xrange(iterations):
             size = int(random.lognormvariate(0, 1) * 1000)
             b = multiprocessing.heap.BufferWrapper(size)
             blocks.append(b)
@@ -1672,9 +1509,7 @@ class _TestHeap(BaseTestCase):
         # verify the state of the heap
         all = []
         occupied = 0
-        heap._lock.acquire()
-        self.addCleanup(heap._lock.release)
-        for L in list(heap._len_to_seq.values()):
+        for L in heap._len_to_seq.values():
             for arena, start, stop in L:
                 all.append((heap._arenas.index(arena), start, stop,
                             stop-start, 'free'))
@@ -1691,31 +1526,15 @@ class _TestHeap(BaseTestCase):
             self.assertTrue((arena != narena and nstart == 0) or
                             (stop == nstart))
 
-    def test_free_from_gc(self):
-        # Check that freeing of blocks by the garbage collector doesn't deadlock
-        # (issue #12352).
-        # Make sure the GC is enabled, and set lower collection thresholds to
-        # make collections more frequent (and increase the probability of
-        # deadlock).
-        if not gc.isenabled():
-            gc.enable()
-            self.addCleanup(gc.disable)
-        thresholds = gc.get_threshold()
-        self.addCleanup(gc.set_threshold, *thresholds)
-        gc.set_threshold(10)
+#
+#
+#
 
-        # perform numerous block allocations, with cyclic references to make
-        # sure objects are collected asynchronously by the gc
-        for i in range(5000):
-            a = multiprocessing.heap.BufferWrapper(1)
-            b = multiprocessing.heap.BufferWrapper(1)
-            # circular references
-            a.buddy = b
-            b.buddy = a
-
-#
-#
-#
+try:
+    from ctypes import Structure, Value, copy, c_int, c_double
+except ImportError:
+    Structure = object
+    c_int = c_double = None
 
 class _Foo(Structure):
     _fields_ = [
@@ -1727,12 +1546,7 @@ class _TestSharedCTypes(BaseTestCase):
 
     ALLOWED_TYPES = ('processes',)
 
-    def setUp(self):
-        if not HAS_SHAREDCTYPES:
-            self.skipTest("requires multiprocessing.sharedctypes")
-
-    @classmethod
-    def _double(cls, x, y, foo, arr, string):
+    def _double(self, x, y, foo, arr, string):
         x.value *= 2
         y.value *= 2
         foo.x *= 2
@@ -1742,12 +1556,15 @@ class _TestSharedCTypes(BaseTestCase):
             arr[i] *= 2
 
     def test_sharedctypes(self, lock=False):
+        if c_int is None:
+            return
+
         x = Value('i', 7, lock=lock)
         y = Value(c_double, 1.0/3.0, lock=lock)
         foo = Value(_Foo, 3, 2, lock=lock)
-        arr = self.Array('d', list(range(10)), lock=lock)
+        arr = self.Array('d', range(10), lock=lock)
         string = self.Array('c', 20, lock=lock)
-        string.value = latin('hello')
+        string.value = 'hello'
 
         p = self.Process(target=self._double, args=(x, y, foo, arr, string))
         p.start()
@@ -1765,6 +1582,9 @@ class _TestSharedCTypes(BaseTestCase):
         self.test_sharedctypes(lock=True)
 
     def test_copy(self):
+        if c_int is None:
+            return
+
         foo = _Foo(2, 5.0)
         bar = copy(foo)
         foo.x = 0
@@ -1780,8 +1600,7 @@ class _TestFinalize(BaseTestCase):
 
     ALLOWED_TYPES = ('processes',)
 
-    @classmethod
-    def _test_finalize(cls, conn):
+    def _test_finalize(self, conn):
         class Foo(object):
             pass
 
@@ -1812,7 +1631,7 @@ class _TestFinalize(BaseTestCase):
 
         util.Finalize(None, conn.send, args=('STOP',), exitpriority=-100)
 
-        # call multiprocessing's cleanup function then exit process without
+        # call mutliprocessing's cleanup function then exit process without
         # garbage collecting locals
         util._exit_function()
         conn.close()
@@ -1837,17 +1656,13 @@ class _TestImportStar(BaseTestCase):
     ALLOWED_TYPES = ('processes',)
 
     def test_import(self):
-        modules = [
+        modules = (
             'multiprocessing', 'multiprocessing.connection',
             'multiprocessing.heap', 'multiprocessing.managers',
             'multiprocessing.pool', 'multiprocessing.process',
-            'multiprocessing.reduction',
+            'multiprocessing.reduction', 'multiprocessing.sharedctypes',
             'multiprocessing.synchronize', 'multiprocessing.util'
-            ]
-
-        if c_int is not None:
-            # This module requires _ctypes
-            modules.append('multiprocessing.sharedctypes')
+            )
 
         for name in modules:
             __import__(name)
@@ -1875,8 +1690,7 @@ class _TestLogging(BaseTestCase):
         logger.info('nor will this')
         logger.setLevel(LOG_LEVEL)
 
-    @classmethod
-    def _test_level(cls, conn):
+    def _test_level(self, conn):
         logger = multiprocessing.get_logger()
         conn.send(logger.getEffectiveLevel())
 
@@ -1902,38 +1716,18 @@ class _TestLogging(BaseTestCase):
         root_logger.setLevel(root_level)
         logger.setLevel(level=LOG_LEVEL)
 
-
-# class _TestLoggingProcessName(BaseTestCase):
-#
-#     def handle(self, record):
-#         assert record.processName == multiprocessing.current_process().name
-#         self.__handled = True
-#
-#     def test_logging(self):
-#         handler = logging.Handler()
-#         handler.handle = self.handle
-#         self.__handled = False
-#         # Bypass getLogger() and side-effects
-#         logger = logging.getLoggerClass()(
-#                 'multiprocessing.test.TestLoggingProcessName')
-#         logger.addHandler(handler)
-#         logger.propagate = False
-#
-#         logger.warn('foo')
-#         assert self.__handled
-
 #
 # Test to verify handle verification, see issue 3321
 #
 
 class TestInvalidHandle(unittest.TestCase):
 
-    @unittest.skipIf(WIN32, "skipped on Windows")
     def test_invalid_handles(self):
+        if WIN32:
+            return
         conn = _multiprocessing.Connection(44977608)
         self.assertRaises(IOError, conn.poll)
         self.assertRaises(IOError, _multiprocessing.Connection, -1)
-
 #
 # Functions used to create test cases from the base ones in this module
 #
@@ -1950,9 +1744,9 @@ def get_attributes(Source, names):
 def create_test_cases(Mixin, type):
     result = {}
     glob = globals()
-    Type = type.capitalize()
+    Type = type[0].upper() + type[1:]
 
-    for name in list(glob.keys()):
+    for name in glob.keys():
         if name.startswith('_Test'):
             base = glob[name]
             if type in base.ALLOWED_TYPES:
@@ -2039,36 +1833,6 @@ class OtherTest(unittest.TestCase):
                           _FakeConnection(), b'abc')
 
 #
-# Test Manager.start()/Pool.__init__() initializer feature - see issue 5585
-#
-
-def initializer(ns):
-    ns.test += 1
-
-class TestInitializers(unittest.TestCase):
-    def setUp(self):
-        self.mgr = multiprocessing.Manager()
-        self.ns = self.mgr.Namespace()
-        self.ns.test = 0
-
-    def tearDown(self):
-        self.mgr.shutdown()
-
-    def test_manager_initializer(self):
-        m = multiprocessing.managers.SyncManager()
-        self.assertRaises(TypeError, m.start, 1)
-        m.start(initializer, (self.ns,))
-        self.assertEqual(self.ns.test, 1)
-        m.shutdown()
-
-    def test_pool_initializer(self):
-        self.assertRaises(TypeError, multiprocessing.Pool, initializer=1)
-        p = multiprocessing.Pool(1, initializer, (self.ns,))
-        p.close()
-        p.join()
-        self.assertEqual(self.ns.test, 1)
-
-#
 # Issue 5155, 5313, 5331: Test process in processes
 # Verifies os.close(sys.stdin.fileno) vs. sys.stdin.close() behavior
 #
@@ -2076,7 +1840,7 @@ class TestInitializers(unittest.TestCase):
 def _ThisSubProcess(q):
     try:
         item = q.get(block=False)
-    except pyqueue.Empty:
+    except Queue.Empty:
         pass
 
 def _TestProcess(q):
@@ -2127,15 +1891,14 @@ class TestStdinBadfiledescriptor(unittest.TestCase):
         p.join()
 
     def test_flushing(self):
-        sio = io.StringIO()
+        sio = StringIO()
         flike = _file_like(sio)
         flike.write('foo')
         proc = multiprocessing.Process(target=lambda: flike.flush())
         flike.flush()
         assert sio.getvalue() == 'foo'
 
-testcases_other = [OtherTest, TestInvalidHandle, TestInitializers,
-                   TestStdinBadfiledescriptor]
+testcases_other = [OtherTest, TestInvalidHandle, TestStdinBadfiledescriptor]
 
 #
 #
@@ -2146,10 +1909,11 @@ def test_main(run=None):
         try:
             lock = multiprocessing.RLock()
         except OSError:
-            raise unittest.SkipTest("OSError raises on RLock creation, see issue 3111!")
+            from test.test_support import TestSkipped
+            raise TestSkipped("OSError raises on RLock creation, see issue 3111!")
 
     if run is None:
-        from test.support import run_unittest as run
+        from test.test_support import run_unittest as run
 
     util.get_temp_dir()     # creates temp directory for use by all processes
 
@@ -2170,7 +1934,9 @@ def test_main(run=None):
 
     loadTestsFromTestCase = unittest.defaultTestLoader.loadTestsFromTestCase
     suite = unittest.TestSuite(loadTestsFromTestCase(tc) for tc in testcases)
-    run(suite)
+    with test_support._check_py3k_warnings(
+            (".+__(get|set)slice__ has been removed", DeprecationWarning)):
+        run(suite)
 
     ThreadsMixin.pool.terminate()
     ProcessesMixin.pool.terminate()

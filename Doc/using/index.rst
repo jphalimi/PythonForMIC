@@ -1,8 +1,8 @@
 .. _using-index:
 
-##########################
-  Python Setup and Usage
-##########################
+################
+  Using Python
+################
 
 
 This part of the documentation is devoted to general information on the setup

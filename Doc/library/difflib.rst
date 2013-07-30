@@ -12,11 +12,12 @@
    import sys
    from difflib import *
 
+.. versionadded:: 2.1
+
 This module provides classes and functions for comparing sequences. It
 can be used for example, for comparing files, and can produce difference
 information in various formats, including HTML and context and unified
 diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
-
 
 .. class:: SequenceMatcher
 
@@ -36,17 +37,11 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
    complicated way on how many elements the sequences have in common; best case
    time is linear.
 
-   **Automatic junk heuristic:** :class:`SequenceMatcher` supports a heuristic that
-   automatically treats certain sequence items as junk. The heuristic counts how many
-   times each individual item appears in the sequence. If an item's duplicates (after
-   the first one) account for more than 1% of the sequence and the sequence is at least
-   200 items long, this item is marked as "popular" and is treated as junk for
-   the purpose of sequence matching. This heuristic can be turned off by setting
-   the ``autojunk`` argument to ``False`` when creating the :class:`SequenceMatcher`.
-
-   .. versionadded:: 3.2
-      The *autojunk* parameter.
-
+   **Heuristic:** To speed-up matching, items that appear more than 1% of the
+   time in sequences of at least 200 items are treated as junk.  This has the
+   unfortunate side-effect of giving bad results for sequences constructed from
+   a small set of items.  An option to turn off the heuristic will be added to a
+   future version.
 
 .. class:: Differ
 
@@ -84,7 +79,7 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
    The constructor for this class is:
 
 
-   .. method:: __init__(tabsize=8, wrapcolumn=None, linejunk=None, charjunk=IS_CHARACTER_JUNK)
+   .. function:: __init__([tabsize][, wrapcolumn][, linejunk][, charjunk])
 
       Initializes instance of :class:`HtmlDiff`.
 
@@ -100,7 +95,8 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
    The following methods are public:
 
-   .. method:: make_file(fromlines, tolines, fromdesc='', todesc='', context=False, numlines=5)
+
+   .. function:: make_file(fromlines, tolines [, fromdesc][, todesc][, context][, numlines])
 
       Compares *fromlines* and *tolines* (lists of strings) and returns a string which
       is a complete HTML file containing a table showing line by line differences with
@@ -119,7 +115,8 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
       the next difference highlight at the top of the browser without any leading
       context).
 
-   .. method:: make_table(fromlines, tolines, fromdesc='', todesc='', context=False, numlines=5)
+
+   .. function:: make_table(fromlines, tolines [, fromdesc][, todesc][, context][, numlines])
 
       Compares *fromlines* and *tolines* (lists of strings) and returns a string which
       is a complete HTML table showing line by line differences with inter-line and
@@ -131,8 +128,10 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
    :file:`Tools/scripts/diff.py` is a command-line front-end to this class and
    contains a good example of its use.
 
+   .. versionadded:: 2.4
 
-.. function:: context_diff(a, b, fromfile='', tofile='', fromfiledate='', tofiledate='', n=3, lineterm='\\n')
+
+.. function:: context_diff(a, b[, fromfile][, tofile][, fromfiledate][, tofiledate][, n][, lineterm])
 
    Compare *a* and *b* (lists of strings); return a delta (a :term:`generator`
    generating the delta lines) in context diff format.
@@ -152,8 +151,8 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
    The context diff format normally has a header for filenames and modification
    times.  Any or all of these may be specified using strings for *fromfile*,
-   *tofile*, *fromfiledate*, and *tofiledate*.  The modification times are normally
-   expressed in the ISO 8601 format. If not specified, the
+   *tofile*, *fromfiledate*, and *tofiledate*. The modification times are normally
+   expressed in the format returned by :func:`time.ctime`.  If not specified, the
    strings default to blanks.
 
       >>> s1 = ['bacon\n', 'eggs\n', 'ham\n', 'guido\n']
@@ -176,8 +175,10 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
    See :ref:`difflib-interface` for a more detailed example.
 
+   .. versionadded:: 2.3
 
-.. function:: get_close_matches(word, possibilities, n=3, cutoff=0.6)
+
+.. function:: get_close_matches(word, possibilities[, n][, cutoff])
 
    Return a list of the best "good enough" matches.  *word* is a sequence for which
    close matches are desired (typically a string), and *possibilities* is a list of
@@ -203,7 +204,7 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
       ['except']
 
 
-.. function:: ndiff(a, b, linejunk=None, charjunk=IS_CHARACTER_JUNK)
+.. function:: ndiff(a, b[, linejunk][, charjunk])
 
    Compare *a* and *b* (lists of strings); return a :class:`Differ`\ -style
    delta (a :term:`generator` generating the delta lines).
@@ -211,13 +212,14 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
    Optional keyword parameters *linejunk* and *charjunk* are for filter functions
    (or ``None``):
 
-   *linejunk*: A function that accepts a single string argument, and returns
-   true if the string is junk, or false if not. The default is ``None``. There
-   is also a module-level function :func:`IS_LINE_JUNK`, which filters out lines
-   without visible characters, except for at most one pound character (``'#'``)
-   -- however the underlying :class:`SequenceMatcher` class does a dynamic
-   analysis of which lines are so frequent as to constitute noise, and this
-   usually works better than using this function.
+   *linejunk*: A function that accepts a single string argument, and returns true
+   if the string is junk, or false if not. The default is (``None``), starting with
+   Python 2.3.  Before then, the default was the module-level function
+   :func:`IS_LINE_JUNK`, which filters out lines without visible characters, except
+   for at most one pound character (``'#'``). As of Python 2.3, the underlying
+   :class:`SequenceMatcher` class does a dynamic analysis of which lines are so
+   frequent as to constitute noise, and this usually works better than the pre-2.3
+   default.
 
    *charjunk*: A function that accepts a character (a string of length 1), and
    returns if the character is junk, or false if not. The default is module-level
@@ -228,7 +230,7 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
       >>> diff = ndiff('one\ntwo\nthree\n'.splitlines(1),
       ...              'ore\ntree\nemu\n'.splitlines(1))
-      >>> print(''.join(diff), end="")
+      >>> print ''.join(diff),
       - one
       ?  ^
       + ore
@@ -253,17 +255,17 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
       >>> diff = ndiff('one\ntwo\nthree\n'.splitlines(1),
       ...              'ore\ntree\nemu\n'.splitlines(1))
       >>> diff = list(diff) # materialize the generated delta into a list
-      >>> print(''.join(restore(diff, 1)), end="")
+      >>> print ''.join(restore(diff, 1)),
       one
       two
       three
-      >>> print(''.join(restore(diff, 2)), end="")
+      >>> print ''.join(restore(diff, 2)),
       ore
       tree
       emu
 
 
-.. function:: unified_diff(a, b, fromfile='', tofile='', fromfiledate='', tofiledate='', n=3, lineterm='\\n')
+.. function:: unified_diff(a, b[, fromfile][, tofile][, fromfiledate][, tofiledate][, n][, lineterm])
 
    Compare *a* and *b* (lists of strings); return a delta (a :term:`generator`
    generating the delta lines) in unified diff format.
@@ -284,10 +286,9 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
    The context diff format normally has a header for filenames and modification
    times.  Any or all of these may be specified using strings for *fromfile*,
-   *tofile*, *fromfiledate*, and *tofiledate*.  The modification times are normally
-   expressed in the ISO 8601 format. If not specified, the
+   *tofile*, *fromfiledate*, and *tofiledate*. The modification times are normally
+   expressed in the format returned by :func:`time.ctime`.  If not specified, the
    strings default to blanks.
-
 
       >>> s1 = ['bacon\n', 'eggs\n', 'ham\n', 'guido\n']
       >>> s2 = ['python\n', 'eggy\n', 'hamster\n', 'guido\n']
@@ -306,12 +307,14 @@ diffs. For comparing directories and files, see also, the :mod:`filecmp` module.
 
    See :ref:`difflib-interface` for a more detailed example.
 
+   .. versionadded:: 2.3
+
 
 .. function:: IS_LINE_JUNK(line)
 
    Return true for ignorable lines.  The line *line* is ignorable if *line* is
    blank or contains a single ``'#'``, otherwise it is not ignorable.  Used as a
-   default for parameter *linejunk* in :func:`ndiff` in older versions.
+   default for parameter *linejunk* in :func:`ndiff` before Python 2.3.
 
 
 .. function:: IS_CHARACTER_JUNK(ch)
@@ -336,7 +339,7 @@ SequenceMatcher Objects
 The :class:`SequenceMatcher` class has this constructor:
 
 
-.. class:: SequenceMatcher(isjunk=None, a='', b='', autojunk=True)
+.. class:: SequenceMatcher([isjunk[, a[, b]]])
 
    Optional argument *isjunk* must be ``None`` (the default) or a one-argument
    function that takes a sequence element and returns true if and only if the
@@ -352,23 +355,8 @@ The :class:`SequenceMatcher` class has this constructor:
    The optional arguments *a* and *b* are sequences to be compared; both default to
    empty strings.  The elements of both sequences must be :term:`hashable`.
 
-   The optional argument *autojunk* can be used to disable the automatic junk
-   heuristic.
-
-   .. versionadded:: 3.2
-      The *autojunk* parameter.
-
-   SequenceMatcher objects get three data attributes: *bjunk* is the
-   set of elements of *b* for which *isjunk* is True; *bpopular* is the set of
-   non-junk elements considered popular by the heuristic (if it is not
-   disabled); *b2j* is a dict mapping the remaining elements of *b* to a list
-   of positions where they occur. All three are reset whenever *b* is reset
-   with :meth:`set_seqs` or :meth:`set_seq2`.
-
-   .. versionadded:: 3.2
-      The *bjunk* and *bpopular* attributes.
-
    :class:`SequenceMatcher` objects have the following methods:
+
 
    .. method:: set_seqs(a, b)
 
@@ -427,7 +415,8 @@ The :class:`SequenceMatcher` class has this constructor:
 
       If no blocks match, this returns ``(alo, blo, 0)``.
 
-      This method returns a :term:`named tuple` ``Match(a, b, size)``.
+      .. versionchanged:: 2.6
+         This method returns a :term:`named tuple` ``Match(a, b, size)``.
 
 
    .. method:: get_matching_blocks()
@@ -443,6 +432,10 @@ The :class:`SequenceMatcher` class has this constructor:
       triples always describe non-adjacent equal blocks.
 
       .. XXX Explain why a dummy is used!
+
+      .. versionchanged:: 2.5
+         The guarantee that adjacent triples always describe non-adjacent blocks
+         was implemented.
 
       .. doctest::
 
@@ -479,22 +472,20 @@ The :class:`SequenceMatcher` class has this constructor:
 
       For example:
 
-        >>> a = "qabxcd"
-        >>> b = "abycdf"
-        >>> s = SequenceMatcher(None, a, b)
-        >>> for tag, i1, i2, j1, j2 in s.get_opcodes():
-            print('{:7}   a[{}:{}] --> b[{}:{}] {!r:>8} --> {!r}'.format(
-                tag, i1, i2, j1, j2, a[i1:i2], b[j1:j2]))
+         >>> a = "qabxcd"
+         >>> b = "abycdf"
+         >>> s = SequenceMatcher(None, a, b)
+         >>> for tag, i1, i2, j1, j2 in s.get_opcodes():
+         ...    print ("%7s a[%d:%d] (%s) b[%d:%d] (%s)" %
+         ...           (tag, i1, i2, a[i1:i2], j1, j2, b[j1:j2]))
+          delete a[0:1] (q) b[0:0] ()
+           equal a[1:3] (ab) b[0:2] (ab)
+         replace a[3:4] (x) b[2:3] (y)
+           equal a[4:6] (cd) b[3:5] (cd)
+          insert a[6:6] () b[5:6] (f)
 
 
-        delete    a[0:1] --> b[0:0]      'q' --> ''
-        equal     a[1:3] --> b[0:2]     'ab' --> 'ab'
-        replace   a[3:4] --> b[2:3]      'x' --> 'y'
-        equal     a[4:6] --> b[3:5]     'cd' --> 'cd'
-        insert    a[6:6] --> b[5:6]       '' --> 'f'
-
-
-   .. method:: get_grouped_opcodes(n=3)
+   .. method:: get_grouped_opcodes([n])
 
       Return a :term:`generator` of groups with up to *n* lines of context.
 
@@ -503,6 +494,8 @@ The :class:`SequenceMatcher` class has this constructor:
       have no changes.
 
       The groups are returned in the same format as :meth:`get_opcodes`.
+
+      .. versionadded:: 2.3
 
 
    .. method:: ratio()
@@ -524,11 +517,16 @@ The :class:`SequenceMatcher` class has this constructor:
 
       Return an upper bound on :meth:`ratio` relatively quickly.
 
+      This isn't defined beyond that it is an upper bound on :meth:`ratio`, and
+      is faster to compute.
+
 
    .. method:: real_quick_ratio()
 
       Return an upper bound on :meth:`ratio` very quickly.
 
+      This isn't defined beyond that it is an upper bound on :meth:`ratio`, and
+      is faster to compute than either :meth:`ratio` or :meth:`quick_ratio`.
 
 The three methods that return the ratio of matching to total characters can give
 different results due to differing levels of approximation, although
@@ -549,7 +547,7 @@ different results due to differing levels of approximation, although
 SequenceMatcher Examples
 ------------------------
 
-This example compares two strings, considering blanks to be "junk":
+This example compares two strings, considering blanks to be "junk:"
 
    >>> s = SequenceMatcher(lambda x: x == " ",
    ...                     "private Thread currentThread;",
@@ -559,14 +557,14 @@ This example compares two strings, considering blanks to be "junk":
 sequences.  As a rule of thumb, a :meth:`ratio` value over 0.6 means the
 sequences are close matches:
 
-   >>> print(round(s.ratio(), 3))
+   >>> print round(s.ratio(), 3)
    0.866
 
 If you're only interested in where the sequences match,
 :meth:`get_matching_blocks` is handy:
 
    >>> for block in s.get_matching_blocks():
-   ...     print("a[%d] and b[%d] match for %d elements" % block)
+   ...     print "a[%d] and b[%d] match for %d elements" % block
    a[0] and b[0] match for 8 elements
    a[8] and b[17] match for 21 elements
    a[29] and b[38] match for 0 elements
@@ -579,7 +577,7 @@ If you want to know how to change the first sequence into the second, use
 :meth:`get_opcodes`:
 
    >>> for opcode in s.get_opcodes():
-   ...     print("%6s a[%d:%d] b[%d:%d]" % opcode)
+   ...     print "%6s a[%d:%d] b[%d:%d]" % opcode
     equal a[0:8] b[0:8]
    insert a[8:8] b[8:17]
     equal a[8:29] b[17:38]
@@ -609,7 +607,7 @@ locality, at the occasional cost of producing a longer diff.
 The :class:`Differ` class has this constructor:
 
 
-.. class:: Differ(linejunk=None, charjunk=None)
+.. class:: Differ([linejunk[, charjunk]])
 
    Optional keyword parameters *linejunk* and *charjunk* are for filter functions
    (or ``None``):

@@ -1,21 +1,8 @@
-#!/usr/bin/env python3
-import re
-import sys
-import shutil
 import os.path
 import subprocess
-import sysconfig
+import sys
 
 import reindent
-import untabify
-
-
-SRCDIR = sysconfig.get_config_var('srcdir')
-
-
-def n_files_str(count):
-    """Return 'N file(s)' with the proper plurality on 'file'."""
-    return "{} file{}".format(count, "s" if count != 1 else "")
 
 
 def status(message, modal=False, info=None):
@@ -26,110 +13,56 @@ def status(message, modal=False, info=None):
             sys.stdout.flush()
             result = fxn(*args, **kwargs)
             if not modal and not info:
-                print("done")
+                print "done"
             elif info:
-                print(info(result))
+                print info(result)
             else:
-                print("yes" if result else "NO")
+                if result:
+                    print "yes"
+                else:
+                    print "NO"
             return result
         return call_fxn
     return decorated_fxn
 
-
 @status("Getting the list of files that have been added/changed",
-        info=lambda x: n_files_str(len(x)))
+            info=lambda x: "%s files" % len(x))
 def changed_files():
-    """Get the list of changed or added files from the VCS."""
-    if os.path.isdir(os.path.join(SRCDIR, '.hg')):
-        vcs = 'hg'
-        cmd = 'hg status --added --modified --no-status'
-    elif os.path.isdir('.svn'):
-        vcs = 'svn'
-        cmd = 'svn status --quiet --non-interactive --ignore-externals'
-    else:
-        sys.exit('need a checkout to get modified files')
+    """Run ``svn status`` and return a set of files that have been
+    changed/added."""
+    cmd = 'svn status --quiet --non-interactive --ignore-externals'
+    svn_st = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    svn_st.wait()
+    output = [line.strip() for line in svn_st.stdout.readlines()]
+    files = set()
+    for line in output:
+        if not line[0] in ('A', 'M'):
+            continue
+        line_parts = line.split()
+        path = line_parts[-1]
+        if os.path.isfile(path):
+            files.add(path)
+    return files
 
-    st = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
-    try:
-        st.wait()
-        if vcs == 'hg':
-            return [x.decode().rstrip() for x in st.stdout]
-        else:
-            output = (x.decode().rstrip().rsplit(None, 1)[-1]
-                      for x in st.stdout if x[0] in b'AM')
-        return set(path for path in output if os.path.isfile(path))
-    finally:
-        st.stdout.close()
-
-
-def report_modified_files(file_paths):
-    count = len(file_paths)
-    if count == 0:
-        return n_files_str(count)
-    else:
-        lines = ["{}:".format(n_files_str(count))]
-        for path in file_paths:
-            lines.append("  {}".format(path))
-        return "\n".join(lines)
-
-
-@status("Fixing whitespace", info=report_modified_files)
+@status("Fixing whitespace", info=lambda x: "%s files" % x)
 def normalize_whitespace(file_paths):
     """Make sure that the whitespace for .py files have been normalized."""
     reindent.makebackup = False  # No need to create backups.
-    fixed = []
-    for path in (x for x in file_paths if x.endswith('.py')):
-        if reindent.check(os.path.join(SRCDIR, path)):
-            fixed.append(path)
-    return fixed
-
-
-@status("Fixing C file whitespace", info=report_modified_files)
-def normalize_c_whitespace(file_paths):
-    """Report if any C files """
-    fixed = []
-    for path in file_paths:
-        abspath = os.path.join(SRCDIR, path)
-        with open(abspath, 'r') as f:
-            if '\t' not in f.read():
-                continue
-        untabify.process(abspath, 8, verbose=False)
-        fixed.append(path)
-    return fixed
-
-
-ws_re = re.compile(br'\s+(\r?\n)$')
-
-@status("Fixing docs whitespace", info=report_modified_files)
-def normalize_docs_whitespace(file_paths):
-    fixed = []
-    for path in file_paths:
-        abspath = os.path.join(SRCDIR, path)
-        try:
-            with open(abspath, 'rb') as f:
-                lines = f.readlines()
-            new_lines = [ws_re.sub(br'\1', line) for line in lines]
-            if new_lines != lines:
-                shutil.copyfile(abspath, abspath + '.bak')
-                with open(abspath, 'wb') as f:
-                    f.writelines(new_lines)
-                fixed.append(path)
-        except Exception as err:
-            print('Cannot fix %s: %s' % (path, err))
-    return fixed
-
+    result = map(reindent.check, (x for x in file_paths if x.endswith('.py')))
+    return sum(result)
 
 @status("Docs modified", modal=True)
 def docs_modified(file_paths):
-    """Report if any file in the Doc directory has been changed."""
-    return bool(file_paths)
-
+    """Report if any files in the Docs directory."""
+    for path in file_paths:
+        if path.startswith("Doc"):
+            return True
+    return False
 
 @status("Misc/ACKS updated", modal=True)
 def credit_given(file_paths):
     """Check if Misc/ACKS has been changed."""
     return 'Misc/ACKS' in file_paths
-
 
 @status("Misc/NEWS updated", modal=True)
 def reported_news(file_paths):
@@ -139,27 +72,18 @@ def reported_news(file_paths):
 
 def main():
     file_paths = changed_files()
-    python_files = [fn for fn in file_paths if fn.endswith('.py')]
-    c_files = [fn for fn in file_paths if fn.endswith(('.c', '.h'))]
-    doc_files = [fn for fn in file_paths if fn.startswith('Doc')]
-    special_files = {'Misc/ACKS', 'Misc/NEWS'} & set(file_paths)
-    # PEP 8 whitespace rules enforcement.
-    normalize_whitespace(python_files)
-    # C rules enforcement.
-    normalize_c_whitespace(c_files)
-    # Doc whitespace enforcement.
-    normalize_docs_whitespace(doc_files)
+    # PEP 7/8 verification.
+    normalize_whitespace(file_paths)
     # Docs updated.
-    docs_modified(doc_files)
+    docs_modified(file_paths)
     # Misc/ACKS changed.
-    credit_given(special_files)
+    credit_given(file_paths)
     # Misc/NEWS changed.
-    reported_news(special_files)
+    reported_news(file_paths)
 
     # Test suite run and passed.
-    if python_files or c_files:
-        print()
-        print("Did you run the test suite?")
+    print
+    print "Did you run the test suite?"
 
 
 if __name__ == '__main__':

@@ -14,9 +14,6 @@ from lib2to3.fixer_util import touch_import
 
 class FixReduce(fixer_base.BaseFix):
 
-    BM_compatible = True
-    order = "pre"
-
     PATTERN = """
     power< 'reduce'
         trailer< '('
@@ -32,4 +29,4 @@ class FixReduce(fixer_base.BaseFix):
     """
 
     def transform(self, node, results):
-        touch_import('functools', 'reduce', node)
+        touch_import(u'functools', u'reduce', node)

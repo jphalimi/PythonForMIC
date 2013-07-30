@@ -10,6 +10,8 @@
 
 .. index:: single: msi
 
+.. versionadded:: 2.5
+
 The :mod:`msilib` supports the creation of Microsoft Installer (``.msi``) files.
 Because these files often contain an embedded "cabinet" file (``.cab``), it also
 exposes an API to create CAB files. Support for reading ``.cab`` files is
@@ -42,7 +44,7 @@ structures.
 .. function:: UuidCreate()
 
    Return the string representation of a new unique identifier. This wraps the
-   Windows API functions :c:func:`UuidCreate` and :c:func:`UuidToString`.
+   Windows API functions :cfunc:`UuidCreate` and :cfunc:`UuidToString`.
 
 
 .. function:: OpenDatabase(path, persist)
@@ -58,7 +60,7 @@ structures.
 
 .. function:: CreateRecord(count)
 
-   Return a new record object by calling :c:func:`MSICreateRecord`. *count* is the
+   Return a new record object by calling :cfunc:`MSICreateRecord`. *count* is the
    number of fields of the record.
 
 
@@ -133,20 +135,20 @@ Database Objects
 
 .. method:: Database.OpenView(sql)
 
-   Return a view object, by calling :c:func:`MSIDatabaseOpenView`. *sql* is the SQL
+   Return a view object, by calling :cfunc:`MSIDatabaseOpenView`. *sql* is the SQL
    statement to execute.
 
 
 .. method:: Database.Commit()
 
    Commit the changes pending in the current transaction, by calling
-   :c:func:`MSIDatabaseCommit`.
+   :cfunc:`MSIDatabaseCommit`.
 
 
 .. method:: Database.GetSummaryInformation(count)
 
    Return a new summary information object, by calling
-   :c:func:`MsiGetSummaryInformation`.  *count* is the maximum number of updated
+   :cfunc:`MsiGetSummaryInformation`.  *count* is the maximum number of updated
    values.
 
 
@@ -164,7 +166,7 @@ View Objects
 
 .. method:: View.Execute(params)
 
-   Execute the SQL query of the view, through :c:func:`MSIViewExecute`. If
+   Execute the SQL query of the view, through :cfunc:`MSIViewExecute`. If
    *params* is not ``None``, it is a record describing actual values of the
    parameter tokens in the query.
 
@@ -172,18 +174,18 @@ View Objects
 .. method:: View.GetColumnInfo(kind)
 
    Return a record describing the columns of the view, through calling
-   :c:func:`MsiViewGetColumnInfo`. *kind* can be either ``MSICOLINFO_NAMES`` or
+   :cfunc:`MsiViewGetColumnInfo`. *kind* can be either ``MSICOLINFO_NAMES`` or
    ``MSICOLINFO_TYPES``.
 
 
 .. method:: View.Fetch()
 
-   Return a result record of the query, through calling :c:func:`MsiViewFetch`.
+   Return a result record of the query, through calling :cfunc:`MsiViewFetch`.
 
 
 .. method:: View.Modify(kind, data)
 
-   Modify the view, by calling :c:func:`MsiViewModify`. *kind* can be one of
+   Modify the view, by calling :cfunc:`MsiViewModify`. *kind* can be one of
    ``MSIMODIFY_SEEK``, ``MSIMODIFY_REFRESH``, ``MSIMODIFY_INSERT``,
    ``MSIMODIFY_UPDATE``, ``MSIMODIFY_ASSIGN``, ``MSIMODIFY_REPLACE``,
    ``MSIMODIFY_MERGE``, ``MSIMODIFY_DELETE``, ``MSIMODIFY_INSERT_TEMPORARY``,
@@ -195,7 +197,7 @@ View Objects
 
 .. method:: View.Close()
 
-   Close the view, through :c:func:`MsiViewClose`.
+   Close the view, through :cfunc:`MsiViewClose`.
 
 
 .. seealso::
@@ -214,7 +216,7 @@ Summary Information Objects
 
 .. method:: SummaryInformation.GetProperty(field)
 
-   Return a property of the summary, through :c:func:`MsiSummaryInfoGetProperty`.
+   Return a property of the summary, through :cfunc:`MsiSummaryInfoGetProperty`.
    *field* is the name of the property, and can be one of the constants
    ``PID_CODEPAGE``, ``PID_TITLE``, ``PID_SUBJECT``, ``PID_AUTHOR``,
    ``PID_KEYWORDS``, ``PID_COMMENTS``, ``PID_TEMPLATE``, ``PID_LASTAUTHOR``,
@@ -226,12 +228,12 @@ Summary Information Objects
 .. method:: SummaryInformation.GetPropertyCount()
 
    Return the number of summary properties, through
-   :c:func:`MsiSummaryInfoGetPropertyCount`.
+   :cfunc:`MsiSummaryInfoGetPropertyCount`.
 
 
 .. method:: SummaryInformation.SetProperty(field, value)
 
-   Set a property through :c:func:`MsiSummaryInfoSetProperty`. *field* can have the
+   Set a property through :cfunc:`MsiSummaryInfoSetProperty`. *field* can have the
    same values as in :meth:`GetProperty`, *value* is the new value of the property.
    Possible value types are integer and string.
 
@@ -239,7 +241,7 @@ Summary Information Objects
 .. method:: SummaryInformation.Persist()
 
    Write the modified properties to the summary information stream, using
-   :c:func:`MsiSummaryInfoPersist`.
+   :cfunc:`MsiSummaryInfoPersist`.
 
 
 .. seealso::
@@ -258,7 +260,7 @@ Record Objects
 .. method:: Record.GetFieldCount()
 
    Return the number of fields of the record, through
-   :c:func:`MsiRecordGetFieldCount`.
+   :cfunc:`MsiRecordGetFieldCount`.
 
 
 .. method:: Record.GetInteger(field)
@@ -275,25 +277,25 @@ Record Objects
 
 .. method:: Record.SetString(field, value)
 
-   Set *field* to *value* through :c:func:`MsiRecordSetString`. *field* must be an
+   Set *field* to *value* through :cfunc:`MsiRecordSetString`. *field* must be an
    integer; *value* a string.
 
 
 .. method:: Record.SetStream(field, value)
 
    Set *field* to the contents of the file named *value*, through
-   :c:func:`MsiRecordSetStream`. *field* must be an integer; *value* a string.
+   :cfunc:`MsiRecordSetStream`. *field* must be an integer; *value* a string.
 
 
 .. method:: Record.SetInteger(field, value)
 
-   Set *field* to *value* through :c:func:`MsiRecordSetInteger`. Both *field* and
+   Set *field* to *value* through :cfunc:`MsiRecordSetInteger`. Both *field* and
    *value* must be an integer.
 
 
 .. method:: Record.ClearData()
 
-   Set all fields of the record to 0, through :c:func:`MsiRecordClearData`.
+   Set all fields of the record to 0, through :cfunc:`MsiRecordClearData`.
 
 
 .. seealso::
@@ -351,7 +353,7 @@ Directory Objects
 -----------------
 
 
-.. class:: Directory(database, cab, basedir, physical,  logical, default, [componentflags])
+.. class:: Directory(database, cab, basedir, physical,  logical, default, component, [componentflags])
 
    Create a new directory in the Directory table. There is a current component at
    each point in time for the directory, which is either explicitly created through
@@ -363,7 +365,7 @@ Directory Objects
    the default flags that new components get.
 
 
-   .. method:: start_component(component=None, feature=None, flags=None, keyfile=None, uuid=None)
+   .. method:: start_component([component[, feature[, flags[, keyfile[, uuid]]]]])
 
       Add an entry to the Component table, and make this component the current
       component for this directory. If no component name is given, the directory
@@ -372,7 +374,7 @@ Directory Objects
       is given, the KeyPath is left null in the Component table.
 
 
-   .. method:: add_file(file, src=None, version=None, language=None)
+   .. method:: add_file(file[, src[, version[, language]]])
 
       Add a file to the current component of the directory, starting a new one
       if there is no current component. By default, the file name in the source
@@ -381,7 +383,7 @@ Directory Objects
       and a *language* can be specified for the entry in the File table.
 
 
-   .. method:: glob(pattern, exclude=None)
+   .. method:: glob(pattern[, exclude])
 
       Add a list of files to the current component as specified in the glob
       pattern.  Individual files can be excluded in the *exclude* list.
@@ -405,7 +407,7 @@ Features
 --------
 
 
-.. class:: Feature(db, id, title, desc, display, level=1, parent=None, directory=None,  attributes=0)
+.. class:: Feature(database, id, title, desc, display[, level=1[, parent[, directory[,  attributes=0]]]])
 
    Add a new record to the ``Feature`` table, using the values *id*, *parent.id*,
    *title*, *desc*, *display*, *level*, *directory*, and *attributes*. The
@@ -440,7 +442,7 @@ to create MSI files with a user-interface for installing Python packages.
    belongs to, and *name* is the control's name.
 
 
-   .. method:: event(event, argument, condition=1, ordering=None)
+   .. method:: event(event, argument[,  condition=1[, ordering]])
 
       Make an entry into the ``ControlEvent`` table for this control.
 
@@ -461,10 +463,10 @@ to create MSI files with a user-interface for installing Python packages.
    that gets set when a radio button is selected.
 
 
-   .. method:: add(name, x, y, width, height, text, value=None)
+   .. method:: add(name, x, y, width, height, text [, value])
 
       Add a radio button named *name* to the group, at the coordinates *x*, *y*,
-      *width*, *height*, and with the label *text*. If *value* is ``None``, it
+      *width*, *height*, and with the label *text*. If *value* is omitted, it
       defaults to *name*.
 
 

@@ -126,7 +126,7 @@ class BufferedSubFile(object):
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def next(self):
         line = self.readline()
         if line == '':
             raise StopIteration
@@ -142,7 +142,7 @@ class FeedParser:
         self._factory = _factory
         self._input = BufferedSubFile()
         self._msgstack = []
-        self._parse = self._parsegen().__next__
+        self._parse = self._parsegen().next
         self._cur = None
         self._last = None
         self._headersonly = False
@@ -368,12 +368,12 @@ class FeedParser:
                                 end = len(mo.group(0))
                                 self._last.epilogue = epilogue[:-end]
                     else:
-                        payload = self._last._payload
-                        if isinstance(payload, str):
+                        payload = self._last.get_payload()
+                        if isinstance(payload, basestring):
                             mo = NLCRE_eol.search(payload)
                             if mo:
                                 payload = payload[:-len(mo.group(0))]
-                                self._last._payload = payload
+                                self._last.set_payload(payload)
                     self._input.pop_eof_matcher()
                     self._pop_message()
                     # Set the multipart up for newline cleansing, which will
@@ -482,10 +482,3 @@ class FeedParser:
         if lastheader:
             # XXX reconsider the joining of folded lines
             self._cur[lastheader] = EMPTYSTRING.join(lastvalue).rstrip('\r\n')
-
-
-class BytesFeedParser(FeedParser):
-    """Like FeedParser, but feed accepts bytes."""
-
-    def feed(self, data):
-        super().feed(data.decode('ascii', 'surrogateescape'))

@@ -26,11 +26,18 @@ class FileWrapper:
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def next(self):
         data = self.filelike.read(self.blksize)
         if data:
             return data
         raise StopIteration
+
+
+
+
+
+
+
 
 def guess_scheme(environ):
     """Return a guess for whether 'wsgi.url_scheme' should be 'http' or 'https'
@@ -43,7 +50,7 @@ def guess_scheme(environ):
 def application_uri(environ):
     """Return the application's base URI (no PATH_INFO or QUERY_STRING)"""
     url = environ['wsgi.url_scheme']+'://'
-    from urllib.parse import quote
+    from urllib import quote
 
     if environ.get('HTTP_HOST'):
         url += environ['HTTP_HOST']
@@ -60,11 +67,11 @@ def application_uri(environ):
     url += quote(environ.get('SCRIPT_NAME') or '/')
     return url
 
-def request_uri(environ, include_query=True):
+def request_uri(environ, include_query=1):
     """Return the full request URI, optionally including the query string"""
     url = application_uri(environ)
-    from urllib.parse import quote
-    path_info = quote(environ.get('PATH_INFO',''),safe='/;=,')
+    from urllib import quote
+    path_info = quote(environ.get('PATH_INFO',''))
     if not environ.get('SCRIPT_NAME'):
         url += path_info[1:]
     else:
@@ -142,8 +149,8 @@ def setup_testing_defaults(environ):
     environ.setdefault('wsgi.multithread', 0)
     environ.setdefault('wsgi.multiprocess', 0)
 
-    from io import StringIO, BytesIO
-    environ.setdefault('wsgi.input', BytesIO())
+    from StringIO import StringIO
+    environ.setdefault('wsgi.input', StringIO(""))
     environ.setdefault('wsgi.errors', StringIO())
     environ.setdefault('wsgi.url_scheme',guess_scheme(environ))
 
@@ -151,6 +158,7 @@ def setup_testing_defaults(environ):
         environ.setdefault('SERVER_PORT', '80')
     elif environ['wsgi.url_scheme']=='https':
         environ.setdefault('SERVER_PORT', '443')
+
 
 
 
@@ -163,3 +171,35 @@ _hoppish = {
 def is_hop_by_hop(header_name):
     """Return true if 'header_name' is an HTTP/1.1 "Hop-by-Hop" header"""
     return _hoppish(header_name.lower())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#

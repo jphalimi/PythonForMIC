@@ -27,7 +27,7 @@ class FixedOffset(tzinfo):
     """Fixed offset in minutes east from UTC."""
 
     def __init__(self, offset, name):
-        self.__offset = timedelta(minutes=offset)
+        self.__offset = timedelta(minutes = offset)
         self.__name = name
 
     def utcoffset(self, dt):
@@ -71,7 +71,7 @@ class LocalTimezone(tzinfo):
     def _isdst(self, dt):
         tt = (dt.year, dt.month, dt.day,
               dt.hour, dt.minute, dt.second,
-              dt.weekday(), 0, 0)
+              dt.weekday(), 0, -1)
         stamp = _time.mktime(tt)
         tt = _time.localtime(stamp)
         return tt.tm_isdst > 0

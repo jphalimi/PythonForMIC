@@ -21,21 +21,23 @@
 """
 Tests for epoll wrapper.
 """
+import os
 import socket
 import errno
 import time
 import select
+import tempfile
 import unittest
 
-from test import support
+from test import test_support
 if not hasattr(select, "epoll"):
-    raise unittest.SkipTest("test works only on Linux 2.6")
+    raise test_support.TestSkipped("test works only on Linux 2.6")
 
 try:
     select.epoll()
-except IOError as e:
+except IOError, e:
     if e.errno == errno.ENOSYS:
-        raise unittest.SkipTest("kernel doesn't support epoll()")
+        raise test_support.TestSkipped("kernel doesn't support epoll()")
 
 class TestEPoll(unittest.TestCase):
 
@@ -55,8 +57,8 @@ class TestEPoll(unittest.TestCase):
         client.setblocking(False)
         try:
             client.connect(('127.0.0.1', self.serverSocket.getsockname()[1]))
-        except socket.error as e:
-            self.assertEqual(e.args[0], errno.EINPROGRESS)
+        except socket.error, e:
+            self.assertEquals(e.args[0], errno.EINPROGRESS)
         else:
             raise AssertionError("Connect should have raised EINPROGRESS")
         server, addr = self.serverSocket.accept()
@@ -67,12 +69,12 @@ class TestEPoll(unittest.TestCase):
     def test_create(self):
         try:
             ep = select.epoll(16)
-        except OSError as e:
+        except OSError, e:
             raise AssertionError(str(e))
-        self.assertTrue(ep.fileno() > 0, ep.fileno())
-        self.assertTrue(not ep.closed)
+        self.assert_(ep.fileno() > 0, ep.fileno())
+        self.assert_(not ep.closed)
         ep.close()
-        self.assertTrue(ep.closed)
+        self.assert_(ep.closed)
         self.assertRaises(ValueError, ep.fileno)
 
     def test_badcreate(self):
@@ -138,8 +140,8 @@ class TestEPoll(unittest.TestCase):
         ep.close()
         try:
             ep2.poll(1, 4)
-        except IOError as e:
-            self.assertEqual(e.args[0], errno.EBADF, e)
+        except IOError, e:
+            self.failUnlessEqual(e.args[0], errno.EBADF, e)
         else:
             self.fail("epoll on closed fd didn't raise EBADF")
 
@@ -155,45 +157,45 @@ class TestEPoll(unittest.TestCase):
         now = time.time()
         events = ep.poll(1, 4)
         then = time.time()
-        self.assertFalse(then - now > 0.1, then - now)
+        self.failIf(then - now > 0.1, then - now)
 
         events.sort()
         expected = [(client.fileno(), select.EPOLLOUT),
                     (server.fileno(), select.EPOLLOUT)]
         expected.sort()
 
-        self.assertEqual(events, expected)
-        self.assertFalse(then - now > 0.01, then - now)
+        self.assertEquals(events, expected)
+        self.failIf(then - now > 0.01, then - now)
 
         now = time.time()
         events = ep.poll(timeout=2.1, maxevents=4)
         then = time.time()
-        self.assertFalse(events)
+        self.failIf(events)
 
-        client.send(b"Hello!")
-        server.send(b"world!!!")
+        client.send("Hello!")
+        server.send("world!!!")
 
         now = time.time()
         events = ep.poll(1, 4)
         then = time.time()
-        self.assertFalse(then - now > 0.01)
+        self.failIf(then - now > 0.01)
 
         events.sort()
         expected = [(client.fileno(), select.EPOLLIN | select.EPOLLOUT),
                     (server.fileno(), select.EPOLLIN | select.EPOLLOUT)]
         expected.sort()
 
-        self.assertEqual(events, expected)
+        self.assertEquals(events, expected)
 
         ep.unregister(client.fileno())
         ep.modify(server.fileno(), select.EPOLLOUT)
         now = time.time()
         events = ep.poll(1, 4)
         then = time.time()
-        self.assertFalse(then - now > 0.01)
+        self.failIf(then - now > 0.01)
 
         expected = [(server.fileno(), select.EPOLLOUT)]
-        self.assertEqual(events, expected)
+        self.assertEquals(events, expected)
 
     def test_errors(self):
         self.assertRaises(ValueError, select.epoll, -2)
@@ -209,13 +211,13 @@ class TestEPoll(unittest.TestCase):
         now = time.time()
         events = ep.poll(1, 4)
         then = time.time()
-        self.assertFalse(then - now > 0.01)
+        self.failIf(then - now > 0.01)
 
         server.close()
         ep.unregister(fd)
 
 def test_main():
-    support.run_unittest(TestEPoll)
+    test_support.run_unittest(TestEPoll)
 
 if __name__ == "__main__":
     test_main()

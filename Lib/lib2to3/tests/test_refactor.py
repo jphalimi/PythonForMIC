@@ -8,7 +8,7 @@ import sys
 import os
 import codecs
 import operator
-import io
+import StringIO
 import tempfile
 import shutil
 import unittest
@@ -126,7 +126,7 @@ from __future__ import print_function"""
         self.assertEqual(top_fixes, [with_head, no_head])
         name_fixes = d.pop(token.NAME)
         self.assertEqual(name_fixes, [simple, no_head])
-        for fixes in d.values():
+        for fixes in d.itervalues():
             self.assertEqual(fixes, [no_head])
 
     def test_fixer_loading(self):
@@ -166,7 +166,7 @@ from __future__ import print_function"""
         results = []
         rt = MyRT(_DEFAULT_FIXERS)
         save = sys.stdin
-        sys.stdin = io.StringIO("def parrot(): pass\n\n")
+        sys.stdin = StringIO.StringIO("def parrot(): pass\n\n")
         try:
             rt.refactor_stdin()
         finally:
@@ -177,26 +177,22 @@ from __future__ import print_function"""
         self.assertEqual(results, expected)
 
     def check_file_refactoring(self, test_file, fixers=_2TO3_FIXERS):
-        tmpdir = tempfile.mkdtemp(prefix="2to3-test_refactor")
-        self.addCleanup(shutil.rmtree, tmpdir)
-        # make a copy of the tested file that we can write to
-        shutil.copy(test_file, tmpdir)
-        test_file = os.path.join(tmpdir, os.path.basename(test_file))
-        os.chmod(test_file, 0o644)
-
         def read_file():
             with open(test_file, "rb") as fp:
                 return fp.read()
-
         old_contents = read_file()
         rt = self.rt(fixers=fixers)
 
         rt.refactor_file(test_file)
         self.assertEqual(old_contents, read_file())
 
-        rt.refactor_file(test_file, True)
-        new_contents = read_file()
-        self.assertNotEqual(old_contents, new_contents)
+        try:
+            rt.refactor_file(test_file, True)
+            new_contents = read_file()
+            self.assertNotEqual(old_contents, new_contents)
+        finally:
+            with open(test_file, "wb") as fp:
+                fp.write(old_contents)
         return new_contents
 
     def test_refactor_file(self):
@@ -227,7 +223,6 @@ from __future__ import print_function"""
                 "hi.py",
                 ".dumb",
                 ".after.py",
-                "notpy.npy",
                 "sappy"]
         expected = ["hi.py"]
         check(tree, expected)

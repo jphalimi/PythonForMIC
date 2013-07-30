@@ -8,7 +8,7 @@
 /* all_name_chars(s): true iff all chars in s are valid NAME_CHARS */
 
 static int
-all_name_chars(Py_UNICODE *s)
+all_name_chars(unsigned char *s)
 {
     static char ok_name_char[256];
     static unsigned char *name_chars = (unsigned char *)NAME_CHARS;
@@ -19,8 +19,6 @@ all_name_chars(Py_UNICODE *s)
             ok_name_char[*p] = 1;
     }
     while (*s) {
-        if (*s >= 128)
-            return 0;
         if (ok_name_char[*s++] == 0)
             return 0;
     }
@@ -34,17 +32,16 @@ intern_strings(PyObject *tuple)
 
     for (i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
         PyObject *v = PyTuple_GET_ITEM(tuple, i);
-        if (v == NULL || !PyUnicode_CheckExact(v)) {
+        if (v == NULL || !PyString_CheckExact(v)) {
             Py_FatalError("non-string found in code slot");
         }
-        PyUnicode_InternInPlace(&PyTuple_GET_ITEM(tuple, i));
+        PyString_InternInPlace(&PyTuple_GET_ITEM(tuple, i));
     }
 }
 
 
 PyCodeObject *
-PyCode_New(int argcount, int kwonlyargcount,
-           int nlocals, int stacksize, int flags,
+PyCode_New(int argcount, int nlocals, int stacksize, int flags,
            PyObject *code, PyObject *consts, PyObject *names,
            PyObject *varnames, PyObject *freevars, PyObject *cellvars,
            PyObject *filename, PyObject *name, int firstlineno,
@@ -52,18 +49,17 @@ PyCode_New(int argcount, int kwonlyargcount,
 {
     PyCodeObject *co;
     Py_ssize_t i;
-
     /* Check argument types */
-    if (argcount < 0 || kwonlyargcount < 0 || nlocals < 0 ||
+    if (argcount < 0 || nlocals < 0 ||
         code == NULL ||
         consts == NULL || !PyTuple_Check(consts) ||
         names == NULL || !PyTuple_Check(names) ||
         varnames == NULL || !PyTuple_Check(varnames) ||
         freevars == NULL || !PyTuple_Check(freevars) ||
         cellvars == NULL || !PyTuple_Check(cellvars) ||
-        name == NULL || !PyUnicode_Check(name) ||
-        filename == NULL || !PyUnicode_Check(filename) ||
-        lnotab == NULL || !PyBytes_Check(lnotab) ||
+        name == NULL || !PyString_Check(name) ||
+        filename == NULL || !PyString_Check(filename) ||
+        lnotab == NULL || !PyString_Check(lnotab) ||
         !PyObject_CheckReadBuffer(code)) {
         PyErr_BadInternalCall();
         return NULL;
@@ -75,16 +71,15 @@ PyCode_New(int argcount, int kwonlyargcount,
     /* Intern selected string constants */
     for (i = PyTuple_Size(consts); --i >= 0; ) {
         PyObject *v = PyTuple_GetItem(consts, i);
-        if (!PyUnicode_Check(v))
+        if (!PyString_Check(v))
             continue;
-        if (!all_name_chars(PyUnicode_AS_UNICODE(v)))
+        if (!all_name_chars((unsigned char *)PyString_AS_STRING(v)))
             continue;
-        PyUnicode_InternInPlace(&PyTuple_GET_ITEM(consts, i));
+        PyString_InternInPlace(&PyTuple_GET_ITEM(consts, i));
     }
     co = PyObject_NEW(PyCodeObject, &PyCode_Type);
     if (co != NULL) {
         co->co_argcount = argcount;
-        co->co_kwonlyargcount = kwonlyargcount;
         co->co_nlocals = nlocals;
         co->co_stacksize = stacksize;
         co->co_flags = flags;
@@ -108,64 +103,15 @@ PyCode_New(int argcount, int kwonlyargcount,
         Py_INCREF(lnotab);
         co->co_lnotab = lnotab;
         co->co_zombieframe = NULL;
-        co->co_weakreflist = NULL;
     }
     return co;
 }
 
-PyCodeObject *
-PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
-{
-    static PyObject *emptystring = NULL;
-    static PyObject *nulltuple = NULL;
-    PyObject *filename_ob = NULL;
-    PyObject *funcname_ob = NULL;
-    PyCodeObject *result = NULL;
-    if (emptystring == NULL) {
-        emptystring = PyBytes_FromString("");
-        if (emptystring == NULL)
-            goto failed;
-    }
-    if (nulltuple == NULL) {
-        nulltuple = PyTuple_New(0);
-        if (nulltuple == NULL)
-            goto failed;
-    }
-    funcname_ob = PyUnicode_FromString(funcname);
-    if (funcname_ob == NULL)
-        goto failed;
-    filename_ob = PyUnicode_DecodeFSDefault(filename);
-    if (filename_ob == NULL)
-        goto failed;
-
-    result = PyCode_New(0,                      /* argcount */
-                0,                              /* kwonlyargcount */
-                0,                              /* nlocals */
-                0,                              /* stacksize */
-                0,                              /* flags */
-                emptystring,                    /* code */
-                nulltuple,                      /* consts */
-                nulltuple,                      /* names */
-                nulltuple,                      /* varnames */
-                nulltuple,                      /* freevars */
-                nulltuple,                      /* cellvars */
-                filename_ob,                    /* filename */
-                funcname_ob,                    /* name */
-                firstlineno,                    /* firstlineno */
-                emptystring                     /* lnotab */
-                );
-
-failed:
-    Py_XDECREF(funcname_ob);
-    Py_XDECREF(filename_ob);
-    return result;
-}
 
 #define OFF(x) offsetof(PyCodeObject, x)
 
 static PyMemberDef code_memberlist[] = {
     {"co_argcount",     T_INT,          OFF(co_argcount),       READONLY},
-    {"co_kwonlyargcount",       T_INT,  OFF(co_kwonlyargcount), READONLY},
     {"co_nlocals",      T_INT,          OFF(co_nlocals),        READONLY},
     {"co_stacksize",T_INT,              OFF(co_stacksize),      READONLY},
     {"co_flags",        T_INT,          OFF(co_flags),          READONLY},
@@ -199,10 +145,10 @@ validate_and_copy_tuple(PyObject *tup)
 
     for (i = 0; i < len; i++) {
         item = PyTuple_GET_ITEM(tup, i);
-        if (PyUnicode_CheckExact(item)) {
+        if (PyString_CheckExact(item)) {
             Py_INCREF(item);
         }
-        else if (!PyUnicode_Check(item)) {
+        else if (!PyString_Check(item)) {
             PyErr_Format(
                 PyExc_TypeError,
                 "name tuples must contain only "
@@ -212,9 +158,9 @@ validate_and_copy_tuple(PyObject *tup)
             return NULL;
         }
         else {
-            item = PyUnicode_FromUnicode(
-                PyUnicode_AS_UNICODE(item),
-                PyUnicode_GET_SIZE(item));
+            item = PyString_FromStringAndSize(
+                PyString_AS_STRING(item),
+                PyString_GET_SIZE(item));
             if (item == NULL) {
                 Py_DECREF(newtuple);
                 return NULL;
@@ -227,9 +173,8 @@ validate_and_copy_tuple(PyObject *tup)
 }
 
 PyDoc_STRVAR(code_doc,
-"code(argcount, kwonlyargcount, nlocals, stacksize, flags, codestring,\n\
-      constants, names, varnames, filename, name, firstlineno,\n\
-      lnotab[, freevars[, cellvars]])\n\
+"code(argcount, nlocals, stacksize, flags, codestring, constants, names,\n\
+      varnames, filename, name, firstlineno, lnotab[, freevars[, cellvars]])\n\
 \n\
 Create a code object.  Not for the faint of heart.");
 
@@ -237,7 +182,6 @@ static PyObject *
 code_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 {
     int argcount;
-    int kwonlyargcount;
     int nlocals;
     int stacksize;
     int flags;
@@ -253,9 +197,8 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     int firstlineno;
     PyObject *lnotab;
 
-    if (!PyArg_ParseTuple(args, "iiiiiSO!O!O!UUiS|O!O!:code",
-                          &argcount, &kwonlyargcount,
-                              &nlocals, &stacksize, &flags,
+    if (!PyArg_ParseTuple(args, "iiiiSO!O!O!SSiS|O!O!:code",
+                          &argcount, &nlocals, &stacksize, &flags,
                           &code,
                           &PyTuple_Type, &consts,
                           &PyTuple_Type, &names,
@@ -273,12 +216,6 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         goto cleanup;
     }
 
-    if (kwonlyargcount < 0) {
-        PyErr_SetString(
-            PyExc_ValueError,
-            "code: kwonlyargcount must not be negative");
-        goto cleanup;
-    }
     if (nlocals < 0) {
         PyErr_SetString(
             PyExc_ValueError,
@@ -305,8 +242,7 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     if (ourcellvars == NULL)
         goto cleanup;
 
-    co = (PyObject *)PyCode_New(argcount, kwonlyargcount,
-                                nlocals, stacksize, flags,
+    co = (PyObject *)PyCode_New(argcount, nlocals, stacksize, flags,
                                 code, consts, ournames, ourvarnames,
                                 ourfreevars, ourcellvars, filename,
                                 name, firstlineno, lnotab);
@@ -332,28 +268,63 @@ code_dealloc(PyCodeObject *co)
     Py_XDECREF(co->co_lnotab);
     if (co->co_zombieframe != NULL)
         PyObject_GC_Del(co->co_zombieframe);
-    if (co->co_weakreflist != NULL)
-        PyObject_ClearWeakRefs((PyObject*)co);
     PyObject_DEL(co);
 }
 
 static PyObject *
 code_repr(PyCodeObject *co)
 {
-    int lineno;
+    char buf[500];
+    int lineno = -1;
+    char *filename = "???";
+    char *name = "???";
+
     if (co->co_firstlineno != 0)
         lineno = co->co_firstlineno;
+    if (co->co_filename && PyString_Check(co->co_filename))
+        filename = PyString_AS_STRING(co->co_filename);
+    if (co->co_name && PyString_Check(co->co_name))
+        name = PyString_AS_STRING(co->co_name);
+    PyOS_snprintf(buf, sizeof(buf),
+                  "<code object %.100s at %p, file \"%.300s\", line %d>",
+                  name, co, filename, lineno);
+    return PyString_FromString(buf);
+}
+
+static int
+code_compare(PyCodeObject *co, PyCodeObject *cp)
+{
+    int cmp;
+    cmp = PyObject_Compare(co->co_name, cp->co_name);
+    if (cmp) return cmp;
+    cmp = co->co_argcount - cp->co_argcount;
+    if (cmp) goto normalize;
+    cmp = co->co_nlocals - cp->co_nlocals;
+    if (cmp) goto normalize;
+    cmp = co->co_flags - cp->co_flags;
+    if (cmp) goto normalize;
+    cmp = co->co_firstlineno - cp->co_firstlineno;
+    if (cmp) goto normalize;
+    cmp = PyObject_Compare(co->co_code, cp->co_code);
+    if (cmp) return cmp;
+    cmp = PyObject_Compare(co->co_consts, cp->co_consts);
+    if (cmp) return cmp;
+    cmp = PyObject_Compare(co->co_names, cp->co_names);
+    if (cmp) return cmp;
+    cmp = PyObject_Compare(co->co_varnames, cp->co_varnames);
+    if (cmp) return cmp;
+    cmp = PyObject_Compare(co->co_freevars, cp->co_freevars);
+    if (cmp) return cmp;
+    cmp = PyObject_Compare(co->co_cellvars, cp->co_cellvars);
+    return cmp;
+
+ normalize:
+    if (cmp > 0)
+        return 1;
+    else if (cmp < 0)
+        return -1;
     else
-        lineno = -1;
-    if (co->co_filename && PyUnicode_Check(co->co_filename)) {
-        return PyUnicode_FromFormat(
-            "<code object %U at %p, file \"%U\", line %d>",
-            co->co_name, co, co->co_filename, lineno);
-    } else {
-        return PyUnicode_FromFormat(
-            "<code object %U at %p, file ???, line %d>",
-            co->co_name, co, lineno);
-    }
+        return 0;
 }
 
 static PyObject *
@@ -366,6 +337,14 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     if ((op != Py_EQ && op != Py_NE) ||
         !PyCode_Check(self) ||
         !PyCode_Check(other)) {
+
+        /* Py3K warning if types are not equal and comparison
+        isn't == or !=  */
+        if (PyErr_WarnPy3k("code inequality comparisons not supported "
+                           "in 3.x", 1) < 0) {
+            return NULL;
+        }
+
         Py_INCREF(Py_NotImplemented);
         return Py_NotImplemented;
     }
@@ -376,8 +355,6 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     eq = PyObject_RichCompareBool(co->co_name, cp->co_name, Py_EQ);
     if (eq <= 0) goto unequal;
     eq = co->co_argcount == cp->co_argcount;
-    if (!eq) goto unequal;
-    eq = co->co_kwonlyargcount == cp->co_kwonlyargcount;
     if (!eq) goto unequal;
     eq = co->co_nlocals == cp->co_nlocals;
     if (!eq) goto unequal;
@@ -417,10 +394,10 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     return res;
 }
 
-static Py_hash_t
+static long
 code_hash(PyCodeObject *co)
 {
-    Py_hash_t h, h0, h1, h2, h3, h4, h5, h6;
+    long h, h0, h1, h2, h3, h4, h5, h6;
     h0 = PyObject_Hash(co->co_name);
     if (h0 == -1) return -1;
     h1 = PyObject_Hash(co->co_code);
@@ -436,8 +413,7 @@ code_hash(PyCodeObject *co)
     h6 = PyObject_Hash(co->co_cellvars);
     if (h6 == -1) return -1;
     h = h0 ^ h1 ^ h2 ^ h3 ^ h4 ^ h5 ^ h6 ^
-        co->co_argcount ^ co->co_kwonlyargcount ^
-        co->co_nlocals ^ co->co_flags;
+        co->co_argcount ^ co->co_nlocals ^ co->co_flags;
     if (h == -1) h = -2;
     return h;
 }
@@ -453,7 +429,7 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_print */
     0,                                  /* tp_getattr */
     0,                                  /* tp_setattr */
-    0,                                  /* tp_reserved */
+    (cmpfunc)code_compare,              /* tp_compare */
     (reprfunc)code_repr,                /* tp_repr */
     0,                                  /* tp_as_number */
     0,                                  /* tp_as_sequence */
@@ -468,8 +444,8 @@ PyTypeObject PyCode_Type = {
     code_doc,                           /* tp_doc */
     0,                                  /* tp_traverse */
     0,                                  /* tp_clear */
-    code_richcompare,                   /* tp_richcompare */
-    offsetof(PyCodeObject, co_weakreflist),     /* tp_weaklistoffset */
+    code_richcompare,                                   /* tp_richcompare */
+    0,                                  /* tp_weaklistoffset */
     0,                                  /* tp_iter */
     0,                                  /* tp_iternext */
     0,                                  /* tp_methods */
@@ -485,15 +461,55 @@ PyTypeObject PyCode_Type = {
     code_new,                           /* tp_new */
 };
 
-/* Use co_lnotab to compute the line number from a bytecode index, addrq.  See
-   lnotab_notes.txt for the details of the lnotab representation.
+/* All about c_lnotab.
+
+c_lnotab is an array of unsigned bytes disguised as a Python string.  In -O
+mode, SET_LINENO opcodes aren't generated, and bytecode offsets are mapped
+to source code line #s (when needed for tracebacks) via c_lnotab instead.
+The array is conceptually a list of
+    (bytecode offset increment, line number increment)
+pairs.  The details are important and delicate, best illustrated by example:
+
+    byte code offset    source code line number
+    0                       1
+    6                       2
+       50                   7
+      350                 307
+      361                 308
+
+The first trick is that these numbers aren't stored, only the increments
+from one row to the next (this doesn't really work, but it's a start):
+
+    0, 1,  6, 1,  44, 5,  300, 300,  11, 1
+
+The second trick is that an unsigned byte can't hold negative values, or
+values larger than 255, so (a) there's a deep assumption that byte code
+offsets and their corresponding line #s both increase monotonically, and (b)
+if at least one column jumps by more than 255 from one row to the next, more
+than one pair is written to the table. In case #b, there's no way to know
+from looking at the table later how many were written.  That's the delicate
+part.  A user of c_lnotab desiring to find the source line number
+corresponding to a bytecode address A should do something like this
+
+    lineno = addr = 0
+    for addr_incr, line_incr in c_lnotab:
+    addr += addr_incr
+    if addr > A:
+        return lineno
+    lineno += line_incr
+
+In order for this to work, when the addr field increments by more than 255,
+the line # increment in each pair generated must be 0 until the remaining addr
+increment is < 256.  So, in the example above, com_set_lineno should not (as
+was actually done until 2.2) expand 300, 300 to 255, 255,  45, 45, but to
+255, 0,  45, 255,  0, 45.
 */
 
 int
 PyCode_Addr2Line(PyCodeObject *co, int addrq)
 {
-    Py_ssize_t size = PyBytes_Size(co->co_lnotab) / 2;
-    unsigned char *p = (unsigned char*)PyBytes_AsString(co->co_lnotab);
+    int size = PyString_Size(co->co_lnotab) / 2;
+    unsigned char *p = (unsigned char*)PyString_AsString(co->co_lnotab);
     int line = co->co_firstlineno;
     int addr = 0;
     while (--size >= 0) {
@@ -505,17 +521,91 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     return line;
 }
 
-/* Update *bounds to describe the first and one-past-the-last instructions in
-   the same line as lasti.  Return the number of that line. */
+/*
+   Check whether the current instruction is at the start of a line.
+
+ */
+
+    /* The theory of SET_LINENO-less tracing.
+
+       In a nutshell, we use the co_lnotab field of the code object
+       to tell when execution has moved onto a different line.
+
+       As mentioned above, the basic idea is so set things up so
+       that
+
+         *instr_lb <= frame->f_lasti < *instr_ub
+
+       is true so long as execution does not change lines.
+
+       This is all fairly simple.  Digging the information out of
+       co_lnotab takes some work, but is conceptually clear.
+
+       Somewhat harder to explain is why we don't *always* call the
+       line trace function when the above test fails.
+
+       Consider this code:
+
+       1: def f(a):
+       2:     if a:
+       3:        print 1
+       4:     else:
+       5:        print 2
+
+       which compiles to this:
+
+       2           0 LOAD_FAST                0 (a)
+                   3 JUMP_IF_FALSE            9 (to 15)
+                   6 POP_TOP
+
+       3           7 LOAD_CONST               1 (1)
+                  10 PRINT_ITEM
+                  11 PRINT_NEWLINE
+                  12 JUMP_FORWARD             6 (to 21)
+         >>   15 POP_TOP
+
+       5          16 LOAD_CONST               2 (2)
+                  19 PRINT_ITEM
+                  20 PRINT_NEWLINE
+         >>   21 LOAD_CONST               0 (None)
+              24 RETURN_VALUE
+
+       If 'a' is false, execution will jump to instruction at offset
+       15 and the co_lnotab will claim that execution has moved to
+       line 3.  This is at best misleading.  In this case we could
+       associate the POP_TOP with line 4, but that doesn't make
+       sense in all cases (I think).
+
+       What we do is only call the line trace function if the co_lnotab
+       indicates we have jumped to the *start* of a line, i.e. if the
+       current instruction offset matches the offset given for the
+       start of a line by the co_lnotab.
+
+       This also takes care of the situation where 'a' is true.
+       Execution will jump from instruction offset 12 to offset 21.
+       Then the co_lnotab would imply that execution has moved to line
+       5, which is again misleading.
+
+       Why do we set f_lineno when tracing?  Well, consider the code
+       above when 'a' is true.  If stepping through this with 'n' in
+       pdb, you would stop at line 1 with a "call" type event, then
+       line events on lines 2 and 3, then a "return" type event -- but
+       you would be shown line 5 during this event.  This is a change
+       from the behaviour in 2.2 and before, and I've found it
+       confusing in practice.  By setting and using f_lineno when
+       tracing, one can report a line number different from that
+       suggested by f_lasti on this one occasion where it's desirable.
+    */
+
+
 int
-_PyCode_CheckLineNumber(PyCodeObject* co, int lasti, PyAddrPair *bounds)
+PyCode_CheckLineNumber(PyCodeObject* co, int lasti, PyAddrPair *bounds)
 {
-    Py_ssize_t size;
-    int addr, line;
+    int size, addr, line;
     unsigned char* p;
 
-    p = (unsigned char*)PyBytes_AS_STRING(co->co_lnotab);
-    size = PyBytes_GET_SIZE(co->co_lnotab) / 2;
+    p = (unsigned char*)PyString_AS_STRING(co->co_lnotab);
+    size = PyString_GET_SIZE(co->co_lnotab) / 2;
 
     addr = 0;
     line = co->co_firstlineno;
@@ -526,9 +616,11 @@ _PyCode_CheckLineNumber(PyCodeObject* co, int lasti, PyAddrPair *bounds)
        instr_lb -- if we stored the matching value of p
        somwhere we could skip the first while loop. */
 
-    /* See lnotab_notes.txt for the description of
+    /* see comments in compile.c for the description of
        co_lnotab.  A point to remember: increments to p
-       come in (addr, line) pairs. */
+       should come in pairs -- although we don't care about
+       the line increments here, treating them as byte
+       increments gets confusing, to say the least. */
 
     bounds->ap_lower = 0;
     while (size > 0) {
@@ -540,6 +632,13 @@ _PyCode_CheckLineNumber(PyCodeObject* co, int lasti, PyAddrPair *bounds)
         line += *p++;
         --size;
     }
+
+    /* If lasti and addr don't match exactly, we don't want to
+       change the lineno slot on the frame or execute a trace
+       function.  Return -1 instead.
+    */
+    if (addr != lasti)
+        line = -1;
 
     if (size > 0) {
         while (--size >= 0) {

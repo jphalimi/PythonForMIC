@@ -5,7 +5,7 @@ that uses .pypirc in the distutils.command package.
 """
 import os
 import sys
-from configparser import ConfigParser
+from ConfigParser import ConfigParser
 
 from distutils.cmd import Command
 
@@ -49,7 +49,7 @@ class PyPIRCCommand(Command):
         finally:
             f.close()
         try:
-            os.chmod(rc, 0o600)
+            os.chmod(rc, 0600)
         except OSError:
             # should do something better here
             pass
@@ -82,12 +82,12 @@ class PyPIRCCommand(Command):
                 for server in _servers:
                     current = {'server': server}
                     current['username'] = config.get(server, 'username')
+                    current['password'] = config.get(server, 'password')
 
                     # optional params
                     for key, default in (('repository',
                                           self.DEFAULT_REPOSITORY),
-                                         ('realm', self.DEFAULT_REALM),
-                                         ('password', None)):
+                                         ('realm', self.DEFAULT_REALM)):
                         if config.has_option(server, key):
                             current[key] = config.get(server, key)
                         else:

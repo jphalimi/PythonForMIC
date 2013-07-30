@@ -97,10 +97,6 @@ TESTNAME(PyObject *error(const char*))
         if (uout != (unsigned TYPENAME)-1 || !PyErr_Occurred())
             return error(
                 "PyLong_AsUnsignedXXX(-1) didn't complain");
-        if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return error(
-                "PyLong_AsUnsignedXXX(-1) raised "
-                "something other than OverflowError");
         PyErr_Clear();
         UNBIND(x);
 
@@ -121,10 +117,6 @@ TESTNAME(PyObject *error(const char*))
             return error(
                 "PyLong_AsUnsignedXXX(2**NBITS) didn't "
                 "complain");
-        if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return error(
-                "PyLong_AsUnsignedXXX(2**NBITS) raised "
-                "something other than OverflowError");
         PyErr_Clear();
 
         /* Signed complains about 2**(NBITS-1)?
@@ -140,10 +132,6 @@ TESTNAME(PyObject *error(const char*))
             return error(
                 "PyLong_AsXXX(2**(NBITS-1)) didn't "
                 "complain");
-        if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return error(
-                "PyLong_AsXXX(2**(NBITS-1)) raised "
-                "something other than OverflowError");
         PyErr_Clear();
 
         /* Signed complains about -2**(NBITS-1)-1?;
@@ -165,10 +153,6 @@ TESTNAME(PyObject *error(const char*))
             return error(
                 "PyLong_AsXXX(-2**(NBITS-1)-1) didn't "
                 "complain");
-        if (!PyErr_ExceptionMatches(PyExc_OverflowError))
-            return error(
-                "PyLong_AsXXX(-2**(NBITS-1)-1) raised "
-                "something other than OverflowError");
         PyErr_Clear();
         UNBIND(y);
 

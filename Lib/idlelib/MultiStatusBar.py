@@ -1,4 +1,4 @@
-from tkinter import *
+from Tkinter import *
 
 class MultiStatusBar(Frame):
 
@@ -9,7 +9,7 @@ class MultiStatusBar(Frame):
         self.labels = {}
 
     def set_label(self, name, text='', side=LEFT):
-        if name not in self.labels:
+        if not self.labels.has_key(name):
             label = Label(self, bd=1, relief=SUNKEN, anchor=W)
             label.pack(side=side)
             self.labels[name] = label

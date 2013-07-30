@@ -55,7 +55,7 @@ fcntl_fcntl(PyObject *self, PyObject *args)
             PyErr_SetFromErrno(PyExc_IOError);
             return NULL;
         }
-        return PyBytes_FromStringAndSize(buf, len);
+        return PyString_FromStringAndSize(buf, len);
     }
 
     PyErr_Clear();
@@ -73,7 +73,7 @@ fcntl_fcntl(PyObject *self, PyObject *args)
         PyErr_SetFromErrno(PyExc_IOError);
         return NULL;
     }
-    return PyLong_FromLong((long)ret);
+    return PyInt_FromLong((long)ret);
 }
 
 PyDoc_STRVAR(fcntl_doc,
@@ -82,10 +82,10 @@ PyDoc_STRVAR(fcntl_doc,
 Perform the requested operation on file descriptor fd.  The operation\n\
 is defined by op and is operating system dependent.  These constants are\n\
 available from the fcntl module.  The argument arg is optional, and\n\
-defaults to 0; it may be an int or a string.  If arg is given as a string,\n\
+defaults to 0; it may be an int or a string. If arg is given as a string,\n\
 the return value of fcntl is a string of that length, containing the\n\
-resulting value put in the arg buffer by the operating system.  The length\n\
-of the arg string is not allowed to exceed 1024 bytes.  If the arg given\n\
+resulting value put in the arg buffer by the operating system.The length\n\
+of the arg string is not allowed to exceed 1024 bytes. If the arg given\n\
 is an integer or if none is specified, the result value is an integer\n\
 corresponding to the return value of the fcntl call in the C code.");
 
@@ -113,18 +113,15 @@ fcntl_ioctl(PyObject *self, PyObject *args)
     unsigned int code;
     int arg;
     int ret;
-    Py_buffer pstr;
     char *str;
     Py_ssize_t len;
     int mutate_arg = 1;
     char buf[IOCTL_BUFSZ+1];  /* argument plus NUL byte */
 
-    if (PyArg_ParseTuple(args, "O&Iw*|i:ioctl",
+    if (PyArg_ParseTuple(args, "O&Iw#|i:ioctl",
                          conv_descriptor, &fd, &code,
-                         &pstr, &mutate_arg)) {
+                         &str, &len, &mutate_arg)) {
         char *arg;
-        str = pstr.buf;
-        len = pstr.len;
 
         if (mutate_arg) {
             if (len <= IOCTL_BUFSZ) {
@@ -138,7 +135,6 @@ fcntl_ioctl(PyObject *self, PyObject *args)
         }
         else {
             if (len > IOCTL_BUFSZ) {
-                PyBuffer_Release(&pstr);
                 PyErr_SetString(PyExc_ValueError,
                     "ioctl string arg too long");
                 return NULL;
@@ -157,29 +153,25 @@ fcntl_ioctl(PyObject *self, PyObject *args)
         else {
             ret = ioctl(fd, code, arg);
         }
-        if (mutate_arg && (len <= IOCTL_BUFSZ)) {
+        if (mutate_arg && (len < IOCTL_BUFSZ)) {
             memcpy(str, buf, len);
         }
-        PyBuffer_Release(&pstr); /* No further access to str below this point */
         if (ret < 0) {
             PyErr_SetFromErrno(PyExc_IOError);
             return NULL;
         }
         if (mutate_arg) {
-            return PyLong_FromLong(ret);
+            return PyInt_FromLong(ret);
         }
         else {
-            return PyBytes_FromStringAndSize(buf, len);
+            return PyString_FromStringAndSize(buf, len);
         }
     }
 
     PyErr_Clear();
-    if (PyArg_ParseTuple(args, "O&Is*:ioctl",
-                         conv_descriptor, &fd, &code, &pstr)) {
-        str = pstr.buf;
-        len = pstr.len;
+    if (PyArg_ParseTuple(args, "O&Is#:ioctl",
+                         conv_descriptor, &fd, &code, &str, &len)) {
         if (len > IOCTL_BUFSZ) {
-            PyBuffer_Release(&pstr);
             PyErr_SetString(PyExc_ValueError,
                             "ioctl string arg too long");
             return NULL;
@@ -190,12 +182,10 @@ fcntl_ioctl(PyObject *self, PyObject *args)
         ret = ioctl(fd, code, buf);
         Py_END_ALLOW_THREADS
         if (ret < 0) {
-            PyBuffer_Release(&pstr);
             PyErr_SetFromErrno(PyExc_IOError);
             return NULL;
         }
-        PyBuffer_Release(&pstr);
-        return PyBytes_FromStringAndSize(buf, len);
+        return PyString_FromStringAndSize(buf, len);
     }
 
     PyErr_Clear();
@@ -217,7 +207,7 @@ fcntl_ioctl(PyObject *self, PyObject *args)
         PyErr_SetFromErrno(PyExc_IOError);
         return NULL;
     }
-    return PyLong_FromLong((long)ret);
+    return PyInt_FromLong((long)ret);
 #undef IOCTL_BUFSZ
 }
 
@@ -352,22 +342,22 @@ fcntl_lockf(PyObject *self, PyObject *args)
         l.l_start = l.l_len = 0;
         if (startobj != NULL) {
 #if !defined(HAVE_LARGEFILE_SUPPORT)
-            l.l_start = PyLong_AsLong(startobj);
+            l.l_start = PyInt_AsLong(startobj);
 #else
             l.l_start = PyLong_Check(startobj) ?
                             PyLong_AsLongLong(startobj) :
-                    PyLong_AsLong(startobj);
+                    PyInt_AsLong(startobj);
 #endif
             if (PyErr_Occurred())
                 return NULL;
         }
         if (lenobj != NULL) {
 #if !defined(HAVE_LARGEFILE_SUPPORT)
-            l.l_len = PyLong_AsLong(lenobj);
+            l.l_len = PyInt_AsLong(lenobj);
 #else
             l.l_len = PyLong_Check(lenobj) ?
                             PyLong_AsLongLong(lenobj) :
-                    PyLong_AsLong(lenobj);
+                    PyInt_AsLong(lenobj);
 #endif
             if (PyErr_Occurred())
                 return NULL;
@@ -433,7 +423,7 @@ a file or socket object.");
 static int
 ins(PyObject* d, char* symbol, long value)
 {
-    PyObject* v = PyLong_FromLong(value);
+    PyObject* v = PyInt_FromLong(value);
     if (!v || PyDict_SetItemString(d, symbol, v) < 0)
         return -1;
 
@@ -614,31 +604,17 @@ all_ins(PyObject* d)
     return 0;
 }
 
-
-static struct PyModuleDef fcntlmodule = {
-    PyModuleDef_HEAD_INIT,
-    "fcntl",
-    module_doc,
-    -1,
-    fcntl_methods,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
 PyMODINIT_FUNC
-PyInit_fcntl(void)
+initfcntl(void)
 {
     PyObject *m, *d;
 
     /* Create the module and add the functions and documentation */
-    m = PyModule_Create(&fcntlmodule);
+    m = Py_InitModule3("fcntl", fcntl_methods, module_doc);
     if (m == NULL)
-        return NULL;
+        return;
 
     /* Add some symbolic constants to the module */
     d = PyModule_GetDict(m);
     all_ins(d);
-    return m;
 }

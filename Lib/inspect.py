@@ -1,7 +1,8 @@
+# -*- coding: iso-8859-1 -*-
 """Get useful information from live Python objects.
 
 This module encapsulates the interface provided by the internal special
-attributes (co_*, im_*, tb_*, etc.) in a friendlier fashion.
+attributes (func_*, co_*, im_*, tb_*, etc.) in a friendlier fashion.
 It also provides some help for examining source code and class layout.
 
 Here are some of the useful functions provided by this module:
@@ -16,8 +17,7 @@ Here are some of the useful functions provided by this module:
     getmodule() - determine the module that an object came from
     getclasstree() - arrange classes so as to represent their hierarchy
 
-    getargspec(), getargvalues(), getcallargs() - get info about function arguments
-    getfullargspec() - same, with support for Python-3000 features
+    getargspec(), getargvalues() - get info about function arguments
     formatargspec(), formatargvalues() - format an argument spec
     getouterframes(), getinnerframes() - get info about frames
     currentframe() - get the current stack frame
@@ -32,29 +32,18 @@ __date__ = '1 Jan 2001'
 import sys
 import os
 import types
-import itertools
 import string
 import re
+import dis
 import imp
 import tokenize
 import linecache
 from operator import attrgetter
 from collections import namedtuple
 
-# Create constants for the compiler flags in Include/code.h
-# We try to get them from dis to avoid duplication, but fall
-# back to hardcording so the dependency is optional
-try:
-    from dis import COMPILER_FLAG_NAMES as _flag_names
-except ImportError:
-    CO_OPTIMIZED, CO_NEWLOCALS = 0x1, 0x2
-    CO_VARARGS, CO_VARKEYWORDS = 0x4, 0x8
-    CO_NESTED, CO_GENERATOR, CO_NOFREE = 0x10, 0x20, 0x40
-else:
-    mod_dict = globals()
-    for k, v in _flag_names.items():
-        mod_dict["CO_" + v] = k
-
+# These constants are from Include/code.h.
+CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS = 0x1, 0x2, 0x4, 0x8
+CO_NESTED, CO_GENERATOR, CO_NOFREE = 0x10, 0x20, 0x40
 # See Include/object.h
 TPFLAGS_IS_ABSTRACT = 1 << 20
 
@@ -63,7 +52,6 @@ def ismodule(object):
     """Return true if the object is a module.
 
     Module objects provide these attributes:
-        __cached__      pathname to byte compiled file
         __doc__         documentation string
         __file__        filename (missing for built-in modules)"""
     return isinstance(object, types.ModuleType)
@@ -74,7 +62,7 @@ def isclass(object):
     Class objects provide these attributes:
         __doc__         documentation string
         __module__      name of module in which this class was defined"""
-    return isinstance(object, type)
+    return isinstance(object, types.ClassType) or hasattr(object, '__bases__')
 
 def ismethod(object):
     """Return true if the object is an instance method.
@@ -82,8 +70,9 @@ def ismethod(object):
     Instance method objects provide these attributes:
         __doc__         documentation string
         __name__        name with which this method was defined
-        __func__        function object containing implementation of method
-        __self__        instance to which this method is bound"""
+        im_class        class object in which this method belongs
+        im_func         function object containing implementation of method
+        im_self         instance to which this method is bound, or None"""
     return isinstance(object, types.MethodType)
 
 def ismethoddescriptor(object):
@@ -99,7 +88,7 @@ def ismethoddescriptor(object):
     Methods implemented via descriptors that also pass one of the other
     tests return false from the ismethoddescriptor() test, simply because
     the other tests promise more -- you can, e.g., count on having the
-    __func__ attribute (etc) when an object passes ismethod()."""
+    im_func attribute (etc) when an object passes ismethod()."""
     return (hasattr(object, "__get__")
             and not hasattr(object, "__set__") # else it's a data descriptor
             and not ismethod(object)           # mutual exclusion
@@ -156,11 +145,11 @@ def isfunction(object):
     Function objects provide these attributes:
         __doc__         documentation string
         __name__        name with which this function was defined
-        __code__        code object containing compiled function bytecode
-        __defaults__    tuple of any default values for arguments
-        __globals__     global namespace in which this function was defined
-        __annotations__ dict of parameter annotations
-        __kwdefaults__  dict of keyword only parameters with defaults"""
+        func_code       code object containing compiled function bytecode
+        func_defaults   tuple of any default values for arguments
+        func_doc        (same as __doc__)
+        func_globals    global namespace in which this function was defined
+        func_name       (same as __name__)"""
     return isinstance(object, types.FunctionType)
 
 def isgeneratorfunction(object):
@@ -168,9 +157,9 @@ def isgeneratorfunction(object):
 
     Generator function objects provides same attributes as functions.
 
-    See help(isfunction) for attributes listing."""
+    See isfunction.__doc__ for attributes listing."""
     return bool((isfunction(object) or ismethod(object)) and
-                object.__code__.co_flags & CO_GENERATOR)
+                object.func_code.co_flags & CO_GENERATOR)
 
 def isgenerator(object):
     """Return true if the object is a generator.
@@ -206,10 +195,14 @@ def isframe(object):
         f_back          next outer frame object (this frame's caller)
         f_builtins      built-in namespace seen by this frame
         f_code          code object being executed in this frame
+        f_exc_traceback traceback if raised in this frame, or None
+        f_exc_type      exception type if raised in this frame, or None
+        f_exc_value     exception value if raised in this frame, or None
         f_globals       global namespace seen by this frame
         f_lasti         index of last attempted instruction in bytecode
         f_lineno        current line number in Python source code
         f_locals        local namespace seen by this frame
+        f_restricted    0 or 1 if frame is in restricted execution mode
         f_trace         tracing function for this frame, or None"""
     return isinstance(object, types.FrameType)
 
@@ -249,17 +242,14 @@ def isroutine(object):
 
 def isabstract(object):
     """Return true if the object is an abstract base class (ABC)."""
-    return bool(isinstance(object, type) and object.__flags__ & TPFLAGS_IS_ABSTRACT)
+    return isinstance(object, type) and object.__flags__ & TPFLAGS_IS_ABSTRACT
 
 def getmembers(object, predicate=None):
     """Return all members of an object as (name, value) pairs sorted by name.
     Optionally, only return members that satisfy a given predicate."""
     results = []
     for key in dir(object):
-        try:
-            value = getattr(object, key)
-        except AttributeError:
-            continue
+        value = getattr(object, key)
         if not predicate or predicate(value):
             results.append((key, value))
     results.sort()
@@ -327,7 +317,7 @@ def classify_class_attrs(cls):
             kind = "class method"
         elif isinstance(obj, property):
             kind = "property"
-        elif (isfunction(obj_via_getattr) or
+        elif (ismethod(obj_via_getattr) or
               ismethoddescriptor(obj_via_getattr)):
             kind = "method"
         else:
@@ -338,16 +328,28 @@ def classify_class_attrs(cls):
     return result
 
 # ----------------------------------------------------------- class helpers
+def _searchbases(cls, accum):
+    # Simulate the "classic class" search order.
+    if cls in accum:
+        return
+    accum.append(cls)
+    for base in cls.__bases__:
+        _searchbases(base, accum)
 
 def getmro(cls):
     "Return tuple of base classes (including cls) in method resolution order."
-    return cls.__mro__
+    if hasattr(cls, "__mro__"):
+        return cls.__mro__
+    else:
+        result = []
+        _searchbases(cls, result)
+        return tuple(result)
 
 # -------------------------------------------------- source code extraction
 def indentsize(line):
     """Return the indent size, in spaces, at the start of a line of text."""
-    expline = line.expandtabs()
-    return len(expline) - len(expline.lstrip())
+    expline = string.expandtabs(line)
+    return len(expline) - len(string.lstrip(expline))
 
 def getdoc(object):
     """Get the documentation string for an object.
@@ -359,7 +361,7 @@ def getdoc(object):
         doc = object.__doc__
     except AttributeError:
         return None
-    if not isinstance(doc, str):
+    if not isinstance(doc, types.StringTypes):
         return None
     return cleandoc(doc)
 
@@ -369,60 +371,61 @@ def cleandoc(doc):
     Any whitespace that can be uniformly removed from the second line
     onwards is removed."""
     try:
-        lines = doc.expandtabs().split('\n')
+        lines = string.split(string.expandtabs(doc), '\n')
     except UnicodeError:
         return None
     else:
         # Find minimum indentation of any non-blank lines after first line.
-        margin = sys.maxsize
+        margin = sys.maxint
         for line in lines[1:]:
-            content = len(line.lstrip())
+            content = len(string.lstrip(line))
             if content:
                 indent = len(line) - content
                 margin = min(margin, indent)
         # Remove indentation.
         if lines:
             lines[0] = lines[0].lstrip()
-        if margin < sys.maxsize:
+        if margin < sys.maxint:
             for i in range(1, len(lines)): lines[i] = lines[i][margin:]
         # Remove any trailing or leading blank lines.
         while lines and not lines[-1]:
             lines.pop()
         while lines and not lines[0]:
             lines.pop(0)
-        return '\n'.join(lines)
+        return string.join(lines, '\n')
 
 def getfile(object):
     """Work out which source or compiled file an object was defined in."""
     if ismodule(object):
         if hasattr(object, '__file__'):
             return object.__file__
-        raise TypeError('{!r} is a built-in module'.format(object))
+        raise TypeError('arg is a built-in module')
     if isclass(object):
         object = sys.modules.get(object.__module__)
         if hasattr(object, '__file__'):
             return object.__file__
-        raise TypeError('{!r} is a built-in class'.format(object))
+        raise TypeError('arg is a built-in class')
     if ismethod(object):
-        object = object.__func__
+        object = object.im_func
     if isfunction(object):
-        object = object.__code__
+        object = object.func_code
     if istraceback(object):
         object = object.tb_frame
     if isframe(object):
         object = object.f_code
     if iscode(object):
         return object.co_filename
-    raise TypeError('{!r} is not a module, class, method, '
-                    'function, traceback, frame, or code object'.format(object))
+    raise TypeError('arg is not a module, class, method, '
+                    'function, traceback, frame, or code object')
 
 ModuleInfo = namedtuple('ModuleInfo', 'name suffix mode module_type')
 
 def getmoduleinfo(path):
     """Get the module name, suffix, mode, and module type for a given file."""
     filename = os.path.basename(path)
-    suffixes = [(-len(suffix), suffix, mode, mtype)
-                    for suffix, mode, mtype in imp.get_suffixes()]
+    suffixes = map(lambda info:
+                   (-len(info[0]), info[0], info[1], info[2]),
+                    imp.get_suffixes())
     suffixes.sort() # try longest suffixes first, in case they overlap
     for neglen, suffix, mode, mtype in suffixes:
         if filename[neglen:] == suffix:
@@ -434,23 +437,18 @@ def getmodulename(path):
     if info: return info[0]
 
 def getsourcefile(object):
-    """Return the filename that can be used to locate an object's source.
-    Return None if no way can be identified to get the source.
-    """
+    """Return the Python source file an object was defined in, if it exists."""
     filename = getfile(object)
-    if filename[-4:].lower() in ('.pyc', '.pyo'):
+    if string.lower(filename[-4:]) in ('.pyc', '.pyo'):
         filename = filename[:-4] + '.py'
     for suffix, mode, kind in imp.get_suffixes():
-        if 'b' in mode and filename[-len(suffix):].lower() == suffix:
+        if 'b' in mode and string.lower(filename[-len(suffix):]) == suffix:
             # Looks like a binary file.  We want to only return a text file.
             return None
     if os.path.exists(filename):
         return filename
     # only return a non-existent filename if the module has a PEP 302 loader
     if hasattr(getmodule(object, filename), '__loader__'):
-        return filename
-    # or it is in the linecache
-    if filename in linecache.cache:
         return filename
 
 def getabsfile(object, _filename=None):
@@ -505,7 +503,7 @@ def getmodule(object, _filename=None):
         if mainobject is object:
             return main
     # Check builtins
-    builtin = sys.modules['builtins']
+    builtin = sys.modules['__builtin__']
     if hasattr(builtin, object.__name__):
         builtinobject = getattr(builtin, object.__name__)
         if builtinobject is object:
@@ -518,13 +516,7 @@ def findsource(object):
     or code object.  The source code is returned as a list of all the lines
     in the file and the line number indexes a line in that list.  An IOError
     is raised if the source code cannot be retrieved."""
-
-    file = getfile(object)
-    sourcefile = getsourcefile(object)
-    if not sourcefile and file[0] + file[-1] != '<>':
-        raise IOError('source code not available')
-    file = sourcefile if sourcefile else file
-
+    file = getsourcefile(object) or getfile(object)
     module = getmodule(object, file)
     if module:
         lines = linecache.getlines(file, module.__dict__)
@@ -560,9 +552,9 @@ def findsource(object):
             raise IOError('could not find class definition')
 
     if ismethod(object):
-        object = object.__func__
+        object = object.im_func
     if isfunction(object):
-        object = object.__code__
+        object = object.func_code
     if istraceback(object):
         object = object.tb_frame
     if isframe(object):
@@ -592,36 +584,36 @@ def getcomments(object):
         # Look for a comment block at the top of the file.
         start = 0
         if lines and lines[0][:2] == '#!': start = 1
-        while start < len(lines) and lines[start].strip() in ('', '#'):
+        while start < len(lines) and string.strip(lines[start]) in ('', '#'):
             start = start + 1
         if start < len(lines) and lines[start][:1] == '#':
             comments = []
             end = start
             while end < len(lines) and lines[end][:1] == '#':
-                comments.append(lines[end].expandtabs())
+                comments.append(string.expandtabs(lines[end]))
                 end = end + 1
-            return ''.join(comments)
+            return string.join(comments, '')
 
     # Look for a preceding block of comments at the same indentation.
     elif lnum > 0:
         indent = indentsize(lines[lnum])
         end = lnum - 1
-        if end >= 0 and lines[end].lstrip()[:1] == '#' and \
+        if end >= 0 and string.lstrip(lines[end])[:1] == '#' and \
             indentsize(lines[end]) == indent:
-            comments = [lines[end].expandtabs().lstrip()]
+            comments = [string.lstrip(string.expandtabs(lines[end]))]
             if end > 0:
                 end = end - 1
-                comment = lines[end].expandtabs().lstrip()
+                comment = string.lstrip(string.expandtabs(lines[end]))
                 while comment[:1] == '#' and indentsize(lines[end]) == indent:
                     comments[:0] = [comment]
                     end = end - 1
                     if end < 0: break
-                    comment = lines[end].expandtabs().lstrip()
-            while comments and comments[0].strip() == '#':
+                    comment = string.lstrip(string.expandtabs(lines[end]))
+            while comments and string.strip(comments[0]) == '#':
                 comments[:1] = []
-            while comments and comments[-1].strip() == '#':
+            while comments and string.strip(comments[-1]) == '#':
                 comments[-1:] = []
-            return ''.join(comments)
+            return string.join(comments, '')
 
 class EndOfBlock(Exception): pass
 
@@ -634,7 +626,9 @@ class BlockFinder:
         self.passline = False
         self.last = 1
 
-    def tokeneater(self, type, token, srowcol, erowcol, line):
+    def tokeneater(self, type, token, srow_scol, erow_ecol, line):
+        srow, scol = srow_scol
+        erow, ecol = erow_ecol
         if not self.started:
             # look for the first "def", "class" or "lambda"
             if token in ("def", "class", "lambda"):
@@ -644,7 +638,7 @@ class BlockFinder:
             self.passline = True    # skip to the end of the line
         elif type == tokenize.NEWLINE:
             self.passline = False   # stop skipping when a NEWLINE is seen
-            self.last = srowcol[0]
+            self.last = srow
             if self.islambda:       # lambdas always end at the first NEWLINE
                 raise EndOfBlock
         elif self.passline:
@@ -668,9 +662,7 @@ def getblock(lines):
     """Extract the block of code at the top of the given list of lines."""
     blockfinder = BlockFinder()
     try:
-        tokens = tokenize.generate_tokens(iter(lines).__next__)
-        for _token in tokens:
-            blockfinder.tokeneater(*_token)
+        tokenize.tokenize(iter(lines).next, blockfinder.tokeneater)
     except (EndOfBlock, IndentationError):
         pass
     return lines[:blockfinder.last]
@@ -695,7 +687,7 @@ def getsource(object):
     or code object.  The source code is returned as a single string.  An
     IOError is raised if the source code cannot be retrieved."""
     lines, lnum = getsourcelines(object)
-    return ''.join(lines)
+    return string.join(lines, '')
 
 # --------------------------------------------------- class tree extraction
 def walktree(classes, children, parent):
@@ -708,7 +700,7 @@ def walktree(classes, children, parent):
             results.append(walktree(children[c], children, c))
     return results
 
-def getclasstree(classes, unique=False):
+def getclasstree(classes, unique=0):
     """Arrange the given list of classes into a hierarchy of nested lists.
 
     Where a nested list appears, it contains classes derived from the class
@@ -734,36 +726,57 @@ def getclasstree(classes, unique=False):
     return walktree(roots, children, None)
 
 # ------------------------------------------------ argument list extraction
-Arguments = namedtuple('Arguments', 'args, varargs, varkw')
+Arguments = namedtuple('Arguments', 'args varargs keywords')
 
 def getargs(co):
     """Get information about the arguments accepted by a code object.
 
-    Three things are returned: (args, varargs, varkw), where
-    'args' is the list of argument names. Keyword-only arguments are
-    appended. 'varargs' and 'varkw' are the names of the * and **
-    arguments or None."""
-    args, varargs, kwonlyargs, varkw = _getfullargs(co)
-    return Arguments(args + kwonlyargs, varargs, varkw)
-
-def _getfullargs(co):
-    """Get information about the arguments accepted by a code object.
-
-    Four things are returned: (args, varargs, kwonlyargs, varkw), where
-    'args' and 'kwonlyargs' are lists of argument names, and 'varargs'
-    and 'varkw' are the names of the * and ** arguments or None."""
+    Three things are returned: (args, varargs, varkw), where 'args' is
+    a list of argument names (possibly containing nested lists), and
+    'varargs' and 'varkw' are the names of the * and ** arguments or None."""
 
     if not iscode(co):
-        raise TypeError('{!r} is not a code object'.format(co))
+        raise TypeError('arg is not a code object')
 
     nargs = co.co_argcount
     names = co.co_varnames
-    nkwargs = co.co_kwonlyargcount
     args = list(names[:nargs])
-    kwonlyargs = list(names[nargs:nargs+nkwargs])
     step = 0
 
-    nargs += nkwargs
+    # The following acrobatics are for anonymous (tuple) arguments.
+    for i in range(nargs):
+        if args[i][:1] in ('', '.'):
+            stack, remain, count = [], [], []
+            while step < len(co.co_code):
+                op = ord(co.co_code[step])
+                step = step + 1
+                if op >= dis.HAVE_ARGUMENT:
+                    opname = dis.opname[op]
+                    value = ord(co.co_code[step]) + ord(co.co_code[step+1])*256
+                    step = step + 2
+                    if opname in ('UNPACK_TUPLE', 'UNPACK_SEQUENCE'):
+                        remain.append(value)
+                        count.append(value)
+                    elif opname == 'STORE_FAST':
+                        stack.append(names[value])
+
+                        # Special case for sublists of length 1: def foo((bar))
+                        # doesn't generate the UNPACK_TUPLE bytecode, so if
+                        # `remain` is empty here, we have such a sublist.
+                        if not remain:
+                            stack[0] = [stack[0]]
+                            break
+                        else:
+                            remain[-1] = remain[-1] - 1
+                            while remain[-1] == 0:
+                                remain.pop()
+                                size = count.pop()
+                                stack[-size:] = [stack[-size:]]
+                                if not remain: break
+                                remain[-1] = remain[-1] - 1
+                            if not remain: break
+            args[i] = stack[0]
+
     varargs = None
     if co.co_flags & CO_VARARGS:
         varargs = co.co_varnames[nargs]
@@ -771,8 +784,7 @@ def _getfullargs(co):
     varkw = None
     if co.co_flags & CO_VARKEYWORDS:
         varkw = co.co_varnames[nargs]
-    return args, varargs, kwonlyargs, varkw
-
+    return Arguments(args, varargs, varkw)
 
 ArgSpec = namedtuple('ArgSpec', 'args varargs keywords defaults')
 
@@ -780,48 +792,17 @@ def getargspec(func):
     """Get the names and default values of a function's arguments.
 
     A tuple of four things is returned: (args, varargs, varkw, defaults).
-    'args' is a list of the argument names.
-    'args' will include keyword-only argument names.
+    'args' is a list of the argument names (it may contain nested lists).
     'varargs' and 'varkw' are the names of the * and ** arguments or None.
     'defaults' is an n-tuple of the default values of the last n arguments.
-
-    Use the getfullargspec() API for Python-3000 code, as annotations
-    and keyword arguments are supported. getargspec() will raise ValueError
-    if the func has either annotations or keyword arguments.
-    """
-
-    args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann = \
-        getfullargspec(func)
-    if kwonlyargs or ann:
-        raise ValueError("Function has keyword-only arguments or annotations"
-                         ", use getfullargspec() API which can support them")
-    return ArgSpec(args, varargs, varkw, defaults)
-
-FullArgSpec = namedtuple('FullArgSpec',
-    'args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, annotations')
-
-def getfullargspec(func):
-    """Get the names and default values of a function's arguments.
-
-    A tuple of seven things is returned:
-    (args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults annotations).
-    'args' is a list of the argument names.
-    'varargs' and 'varkw' are the names of the * and ** arguments or None.
-    'defaults' is an n-tuple of the default values of the last n arguments.
-    'kwonlyargs' is a list of keyword-only argument names.
-    'kwonlydefaults' is a dictionary mapping names from kwonlyargs to defaults.
-    'annotations' is a dictionary mapping argument names to annotations.
-
-    The first four items in the tuple correspond to getargspec().
     """
 
     if ismethod(func):
-        func = func.__func__
+        func = func.im_func
     if not isfunction(func):
-        raise TypeError('{!r} is not a Python function'.format(func))
-    args, varargs, kwonlyargs, varkw = _getfullargs(func.__code__)
-    return FullArgSpec(args, varargs, varkw, func.__defaults__,
-            kwonlyargs, func.__kwdefaults__, func.__annotations__)
+        raise TypeError('arg is not a Python function')
+    args, varargs, varkw = getargs(func.func_code)
+    return ArgSpec(args, varargs, varkw, func.func_defaults)
 
 ArgInfo = namedtuple('ArgInfo', 'args varargs keywords locals')
 
@@ -829,77 +810,57 @@ def getargvalues(frame):
     """Get information about arguments passed into a particular frame.
 
     A tuple of four things is returned: (args, varargs, varkw, locals).
-    'args' is a list of the argument names.
+    'args' is a list of the argument names (it may contain nested lists).
     'varargs' and 'varkw' are the names of the * and ** arguments or None.
     'locals' is the locals dictionary of the given frame."""
     args, varargs, varkw = getargs(frame.f_code)
     return ArgInfo(args, varargs, varkw, frame.f_locals)
 
-def formatannotation(annotation, base_module=None):
-    if isinstance(annotation, type):
-        if annotation.__module__ in ('builtins', base_module):
-            return annotation.__name__
-        return annotation.__module__+'.'+annotation.__name__
-    return repr(annotation)
+def joinseq(seq):
+    if len(seq) == 1:
+        return '(' + seq[0] + ',)'
+    else:
+        return '(' + string.join(seq, ', ') + ')'
 
-def formatannotationrelativeto(object):
-    module = getattr(object, '__module__', None)
-    def _formatannotation(annotation):
-        return formatannotation(annotation, module)
-    return _formatannotation
+def strseq(object, convert, join=joinseq):
+    """Recursively walk a sequence, stringifying each element."""
+    if type(object) in (list, tuple):
+        return join(map(lambda o, c=convert, j=join: strseq(o, c, j), object))
+    else:
+        return convert(object)
 
 def formatargspec(args, varargs=None, varkw=None, defaults=None,
-                  kwonlyargs=(), kwonlydefaults={}, annotations={},
                   formatarg=str,
                   formatvarargs=lambda name: '*' + name,
                   formatvarkw=lambda name: '**' + name,
                   formatvalue=lambda value: '=' + repr(value),
-                  formatreturns=lambda text: ' -> ' + text,
-                  formatannotation=formatannotation):
-    """Format an argument spec from the values returned by getargspec
-    or getfullargspec.
+                  join=joinseq):
+    """Format an argument spec from the 4 values returned by getargspec.
 
-    The first seven arguments are (args, varargs, varkw, defaults,
-    kwonlyargs, kwonlydefaults, annotations).  The other five arguments
-    are the corresponding optional formatting functions that are called to
-    turn names and values into strings.  The last argument is an optional
-    function to format the sequence of arguments."""
-    def formatargandannotation(arg):
-        result = formatarg(arg)
-        if arg in annotations:
-            result += ': ' + formatannotation(annotations[arg])
-        return result
+    The first four arguments are (args, varargs, varkw, defaults).  The
+    other four arguments are the corresponding optional formatting functions
+    that are called to turn names and values into strings.  The ninth
+    argument is an optional function to format the sequence of arguments."""
     specs = []
     if defaults:
         firstdefault = len(args) - len(defaults)
-    for i, arg in enumerate(args):
-        spec = formatargandannotation(arg)
+    for i in range(len(args)):
+        spec = strseq(args[i], formatarg, join)
         if defaults and i >= firstdefault:
             spec = spec + formatvalue(defaults[i - firstdefault])
         specs.append(spec)
     if varargs is not None:
-        specs.append(formatvarargs(formatargandannotation(varargs)))
-    else:
-        if kwonlyargs:
-            specs.append('*')
-    if kwonlyargs:
-        for kwonlyarg in kwonlyargs:
-            spec = formatargandannotation(kwonlyarg)
-            if kwonlydefaults and kwonlyarg in kwonlydefaults:
-                spec += formatvalue(kwonlydefaults[kwonlyarg])
-            specs.append(spec)
+        specs.append(formatvarargs(varargs))
     if varkw is not None:
-        specs.append(formatvarkw(formatargandannotation(varkw)))
-    result = '(' + ', '.join(specs) + ')'
-    if 'return' in annotations:
-        result += formatreturns(formatannotation(annotations['return']))
-    return result
+        specs.append(formatvarkw(varkw))
+    return '(' + string.join(specs, ', ') + ')'
 
 def formatargvalues(args, varargs, varkw, locals,
                     formatarg=str,
                     formatvarargs=lambda name: '*' + name,
                     formatvarkw=lambda name: '**' + name,
-                    formatvalue=lambda value: '=' + repr(value)):
+                    formatvalue=lambda value: '=' + repr(value),
+                    join=joinseq):
     """Format an argument spec from the 4 values returned by getargvalues.
 
     The first four arguments are (args, varargs, varkw, locals).  The
@@ -911,83 +872,12 @@ def formatargvalues(args, varargs, varkw, locals,
         return formatarg(name) + formatvalue(locals[name])
     specs = []
     for i in range(len(args)):
-        specs.append(convert(args[i]))
+        specs.append(strseq(args[i], convert, join))
     if varargs:
         specs.append(formatvarargs(varargs) + formatvalue(locals[varargs]))
     if varkw:
         specs.append(formatvarkw(varkw) + formatvalue(locals[varkw]))
-    return '(' + ', '.join(specs) + ')'
-
-def getcallargs(func, *positional, **named):
-    """Get the mapping of arguments to values.
-
-    A dict is returned, with keys the function argument names (including the
-    names of the * and ** arguments, if any), and values the respective bound
-    values from 'positional' and 'named'."""
-    spec = getfullargspec(func)
-    args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann = spec
-    f_name = func.__name__
-    arg2value = {}
-
-    if ismethod(func) and func.__self__ is not None:
-        # implicit 'self' (or 'cls' for classmethods) argument
-        positional = (func.__self__,) + positional
-    num_pos = len(positional)
-    num_total = num_pos + len(named)
-    num_args = len(args)
-    num_defaults = len(defaults) if defaults else 0
-    for arg, value in zip(args, positional):
-        arg2value[arg] = value
-    if varargs:
-        if num_pos > num_args:
-            arg2value[varargs] = positional[-(num_pos-num_args):]
-        else:
-            arg2value[varargs] = ()
-    elif 0 < num_args < num_pos:
-        raise TypeError('%s() takes %s %d positional %s (%d given)' % (
-            f_name, 'at most' if defaults else 'exactly', num_args,
-            'arguments' if num_args > 1 else 'argument', num_total))
-    elif num_args == 0 and num_total:
-        if varkw or kwonlyargs:
-            if num_pos:
-                # XXX: We should use num_pos, but Python also uses num_total:
-                raise TypeError('%s() takes exactly 0 positional arguments '
-                                '(%d given)' % (f_name, num_total))
-        else:
-            raise TypeError('%s() takes no arguments (%d given)' %
-                            (f_name, num_total))
-
-    for arg in itertools.chain(args, kwonlyargs):
-        if arg in named:
-            if arg in arg2value:
-                raise TypeError("%s() got multiple values for keyword "
-                                "argument '%s'" % (f_name, arg))
-            else:
-                arg2value[arg] = named.pop(arg)
-    for kwonlyarg in kwonlyargs:
-        if kwonlyarg not in arg2value:
-            try:
-                arg2value[kwonlyarg] = kwonlydefaults[kwonlyarg]
-            except KeyError:
-                raise TypeError("%s() needs keyword-only argument %s" %
-                                (f_name, kwonlyarg))
-    if defaults:    # fill in any missing values with the defaults
-        for arg, value in zip(args[-num_defaults:], defaults):
-            if arg not in arg2value:
-                arg2value[arg] = value
-    if varkw:
-        arg2value[varkw] = named
-    elif named:
-        unexpected = next(iter(named))
-        raise TypeError("%s() got an unexpected keyword argument '%s'" %
-                        (f_name, unexpected))
-    unassigned = num_args - len([arg for arg in args if arg in arg2value])
-    if unassigned:
-        num_required = num_args - num_defaults
-        raise TypeError('%s() takes %s %d %s (%d given)' % (
-            f_name, 'at least' if defaults else 'exactly', num_required,
-            'arguments' if num_required > 1 else 'argument', num_total))
-    return arg2value
+    return '(' + string.join(specs, ', ') + ')'
 
 # -------------------------------------------------- stack frame extraction
 
@@ -1007,7 +897,7 @@ def getframeinfo(frame, context=1):
     else:
         lineno = frame.f_lineno
     if not isframe(frame):
-        raise TypeError('{!r} is not a frame or traceback object'.format(frame))
+        raise TypeError('arg is not a frame or traceback object')
 
     filename = getsourcefile(frame) or getfile(frame)
     if context > 0:
@@ -1053,9 +943,10 @@ def getinnerframes(tb, context=1):
         tb = tb.tb_next
     return framelist
 
-def currentframe():
-    """Return the frame of the caller or None if this is not possible."""
-    return sys._getframe(1) if hasattr(sys, "_getframe") else None
+if hasattr(sys, '_getframe'):
+    currentframe = sys._getframe
+else:
+    currentframe = lambda _=None: None
 
 def stack(context=1):
     """Return a list of records for the stack above the caller's frame."""
@@ -1064,115 +955,3 @@ def stack(context=1):
 def trace(context=1):
     """Return a list of records for the stack below the current exception."""
     return getinnerframes(sys.exc_info()[2], context)
-
-
-# ------------------------------------------------ static version of getattr
-
-_sentinel = object()
-
-def _static_getmro(klass):
-    return type.__dict__['__mro__'].__get__(klass)
-
-def _check_instance(obj, attr):
-    instance_dict = {}
-    try:
-        instance_dict = object.__getattribute__(obj, "__dict__")
-    except AttributeError:
-        pass
-    return dict.get(instance_dict, attr, _sentinel)
-
-
-def _check_class(klass, attr):
-    for entry in _static_getmro(klass):
-        if not _shadowed_dict(type(entry)):
-            try:
-                return entry.__dict__[attr]
-            except KeyError:
-                pass
-    return _sentinel
-
-def _is_type(obj):
-    try:
-        _static_getmro(obj)
-    except TypeError:
-        return False
-    return True
-
-def _shadowed_dict(klass):
-    dict_attr = type.__dict__["__dict__"]
-    for entry in _static_getmro(klass):
-        try:
-            class_dict = dict_attr.__get__(entry)["__dict__"]
-        except KeyError:
-            pass
-        else:
-            if not (type(class_dict) is types.GetSetDescriptorType and
-                    class_dict.__name__ == "__dict__" and
-                    class_dict.__objclass__ is entry):
-                return True
-    return False
-
-def getattr_static(obj, attr, default=_sentinel):
-    """Retrieve attributes without triggering dynamic lookup via the
-       descriptor protocol,  __getattr__ or __getattribute__.
-
-       Note: this function may not be able to retrieve all attributes
-       that getattr can fetch (like dynamically created attributes)
-       and may find attributes that getattr can't (like descriptors
-       that raise AttributeError). It can also return descriptor objects
-       instead of instance members in some cases. See the
-       documentation for details.
-    """
-    instance_result = _sentinel
-    if not _is_type(obj):
-        klass = type(obj)
-        if not _shadowed_dict(klass):
-            instance_result = _check_instance(obj, attr)
-    else:
-        klass = obj
-
-    klass_result = _check_class(klass, attr)
-
-    if instance_result is not _sentinel and klass_result is not _sentinel:
-        if (_check_class(type(klass_result), '__get__') is not _sentinel and
-            _check_class(type(klass_result), '__set__') is not _sentinel):
-            return klass_result
-
-    if instance_result is not _sentinel:
-        return instance_result
-    if klass_result is not _sentinel:
-        return klass_result
-
-    if obj is klass:
-        # for types we check the metaclass too
-        for entry in _static_getmro(type(klass)):
-            try:
-                return entry.__dict__[attr]
-            except KeyError:
-                pass
-    if default is not _sentinel:
-        return default
-    raise AttributeError(attr)
-
-
-GEN_CREATED = 'GEN_CREATED'
-GEN_RUNNING = 'GEN_RUNNING'
-GEN_SUSPENDED = 'GEN_SUSPENDED'
-GEN_CLOSED = 'GEN_CLOSED'
-
-def getgeneratorstate(generator):
-    """Get current state of a generator-iterator.
-
-    Possible states are:
-      GEN_CREATED: Waiting to start execution.
-      GEN_RUNNING: Currently being executed by the interpreter.
-      GEN_SUSPENDED: Currently suspended at a yield expression.
-      GEN_CLOSED: Execution has completed.
-    """
-    if generator.gi_running:
-        return GEN_RUNNING
-    if generator.gi_frame is None:
-        return GEN_CLOSED
-    if generator.gi_frame.f_lasti == -1:
-        return GEN_CREATED
-    return GEN_SUSPENDED

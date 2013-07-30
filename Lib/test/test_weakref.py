@@ -1,13 +1,11 @@
 import gc
 import sys
 import unittest
-import collections
+import UserList
 import weakref
 import operator
-import contextlib
-import copy
 
-from test import support
+from test import test_support
 
 # Used in ReferencesTestCase.test_ref_created_during_del() .
 ref_from_del = None
@@ -31,6 +29,9 @@ def create_function():
 def create_bound_method():
     return C().method
 
+def create_unbound_method():
+    return C.method
+
 
 class TestBase(unittest.TestCase):
 
@@ -47,6 +48,7 @@ class ReferencesTestCase(TestBase):
         self.check_basic_ref(C)
         self.check_basic_ref(create_function)
         self.check_basic_ref(create_bound_method)
+        self.check_basic_ref(create_unbound_method)
 
         # Just make sure the tp_repr handler doesn't raise an exception.
         # Live reference:
@@ -61,17 +63,18 @@ class ReferencesTestCase(TestBase):
         self.check_basic_callback(C)
         self.check_basic_callback(create_function)
         self.check_basic_callback(create_bound_method)
+        self.check_basic_callback(create_unbound_method)
 
     def test_multiple_callbacks(self):
         o = C()
         ref1 = weakref.ref(o, self.callback)
         ref2 = weakref.ref(o, self.callback)
         del o
-        self.assertTrue(ref1() is None,
+        self.assert_(ref1() is None,
                      "expected reference to be invalidated")
-        self.assertTrue(ref2() is None,
+        self.assert_(ref2() is None,
                      "expected reference to be invalidated")
-        self.assertTrue(self.cbcalled == 2,
+        self.assert_(self.cbcalled == 2,
                      "callback not called the right number of times")
 
     def test_multiple_selfref_callbacks(self):
@@ -102,18 +105,18 @@ class ReferencesTestCase(TestBase):
         def check(proxy):
             proxy.bar
 
-        self.assertRaises(ReferenceError, check, ref1)
-        self.assertRaises(ReferenceError, check, ref2)
-        self.assertRaises(ReferenceError, bool, weakref.proxy(C()))
-        self.assertEqual(self.cbcalled, 2)
+        self.assertRaises(weakref.ReferenceError, check, ref1)
+        self.assertRaises(weakref.ReferenceError, check, ref2)
+        self.assertRaises(weakref.ReferenceError, bool, weakref.proxy(C()))
+        self.assert_(self.cbcalled == 2)
 
     def check_basic_ref(self, factory):
         o = factory()
         ref = weakref.ref(o)
-        self.assertTrue(ref() is not None,
+        self.assert_(ref() is not None,
                      "weak reference to live object should be live")
         o2 = ref()
-        self.assertTrue(o is o2,
+        self.assert_(o is o2,
                      "<ref>() should return original object if live")
 
     def check_basic_callback(self, factory):
@@ -121,9 +124,9 @@ class ReferencesTestCase(TestBase):
         o = factory()
         ref = weakref.ref(o, self.callback)
         del o
-        self.assertTrue(self.cbcalled == 1,
+        self.assert_(self.cbcalled == 1,
                      "callback did not properly set 'cbcalled'")
-        self.assertTrue(ref() is None,
+        self.assert_(ref() is None,
                      "ref2 should be dead after deleting object reference")
 
     def test_ref_reuse(self):
@@ -133,19 +136,19 @@ class ReferencesTestCase(TestBase):
         # between these two; it should make no difference
         proxy = weakref.proxy(o)
         ref2 = weakref.ref(o)
-        self.assertTrue(ref1 is ref2,
+        self.assert_(ref1 is ref2,
                      "reference object w/out callback should be re-used")
 
         o = C()
         proxy = weakref.proxy(o)
         ref1 = weakref.ref(o)
         ref2 = weakref.ref(o)
-        self.assertTrue(ref1 is ref2,
+        self.assert_(ref1 is ref2,
                      "reference object w/out callback should be re-used")
-        self.assertTrue(weakref.getweakrefcount(o) == 2,
+        self.assert_(weakref.getweakrefcount(o) == 2,
                      "wrong weak ref count for object")
         del proxy
-        self.assertTrue(weakref.getweakrefcount(o) == 1,
+        self.assert_(weakref.getweakrefcount(o) == 1,
                      "wrong weak ref count for object after deleting proxy")
 
     def test_proxy_reuse(self):
@@ -153,47 +156,50 @@ class ReferencesTestCase(TestBase):
         proxy1 = weakref.proxy(o)
         ref = weakref.ref(o)
         proxy2 = weakref.proxy(o)
-        self.assertTrue(proxy1 is proxy2,
+        self.assert_(proxy1 is proxy2,
                      "proxy object w/out callback should have been re-used")
 
     def test_basic_proxy(self):
         o = C()
         self.check_proxy(o, weakref.proxy(o))
 
-        L = collections.UserList()
+        L = UserList.UserList()
         p = weakref.proxy(L)
-        self.assertFalse(p, "proxy for empty UserList should be false")
+        self.failIf(p, "proxy for empty UserList should be false")
         p.append(12)
         self.assertEqual(len(L), 1)
-        self.assertTrue(p, "proxy for non-empty UserList should be true")
-        p[:] = [2, 3]
+        self.failUnless(p, "proxy for non-empty UserList should be true")
+        with test_support._check_py3k_warnings():
+            p[:] = [2, 3]
         self.assertEqual(len(L), 2)
         self.assertEqual(len(p), 2)
-        self.assertIn(3, p, "proxy didn't support __contains__() properly")
+        self.failUnless(3 in p,
+                        "proxy didn't support __contains__() properly")
         p[1] = 5
         self.assertEqual(L[1], 5)
         self.assertEqual(p[1], 5)
-        L2 = collections.UserList(L)
+        L2 = UserList.UserList(L)
         p2 = weakref.proxy(L2)
         self.assertEqual(p, p2)
         ## self.assertEqual(repr(L2), repr(p2))
-        L3 = collections.UserList(range(10))
+        L3 = UserList.UserList(range(10))
         p3 = weakref.proxy(L3)
-        self.assertEqual(L3[:], p3[:])
-        self.assertEqual(L3[5:], p3[5:])
-        self.assertEqual(L3[:5], p3[:5])
-        self.assertEqual(L3[2:5], p3[2:5])
+        with test_support._check_py3k_warnings():
+            self.assertEqual(L3[:], p3[:])
+            self.assertEqual(L3[5:], p3[5:])
+            self.assertEqual(L3[:5], p3[:5])
+            self.assertEqual(L3[2:5], p3[2:5])
 
     def test_proxy_unicode(self):
         # See bug 5037
         class C(object):
             def __str__(self):
                 return "string"
-            def __bytes__(self):
-                return b"bytes"
+            def __unicode__(self):
+                return u"unicode"
         instance = C()
-        self.assertIn("__bytes__", dir(weakref.proxy(instance)))
-        self.assertEqual(bytes(weakref.proxy(instance)), b"bytes")
+        self.assertTrue("__unicode__" in dir(weakref.proxy(instance)))
+        self.assertEqual(unicode(weakref.proxy(instance)), u"unicode")
 
     def test_proxy_index(self):
         class C:
@@ -233,19 +239,19 @@ class ReferencesTestCase(TestBase):
         o = Object(1)
         p1 = makeref(o, None)
         p2 = makeref(o, None)
-        self.assertTrue(p1 is p2, "both callbacks were None in the C API")
+        self.assert_(p1 is p2, "both callbacks were None in the C API")
         del p1, p2
         p1 = makeref(o)
         p2 = makeref(o, None)
-        self.assertTrue(p1 is p2, "callbacks were NULL, None in the C API")
+        self.assert_(p1 is p2, "callbacks were NULL, None in the C API")
         del p1, p2
         p1 = makeref(o)
         p2 = makeref(o)
-        self.assertTrue(p1 is p2, "both callbacks were NULL in the C API")
+        self.assert_(p1 is p2, "both callbacks were NULL in the C API")
         del p1, p2
         p1 = makeref(o, None)
         p2 = makeref(o)
-        self.assertTrue(p1 is p2, "callbacks were None, NULL in the C API")
+        self.assert_(p1 is p2, "callbacks were None, NULL in the C API")
 
     def test_callable_proxy(self):
         o = Callable()
@@ -253,13 +259,13 @@ class ReferencesTestCase(TestBase):
 
         self.check_proxy(o, ref1)
 
-        self.assertTrue(type(ref1) is weakref.CallableProxyType,
+        self.assert_(type(ref1) is weakref.CallableProxyType,
                      "proxy is not of callable type")
         ref1('twinkies!')
-        self.assertTrue(o.bar == 'twinkies!',
+        self.assert_(o.bar == 'twinkies!',
                      "call through proxy not passed through to original")
         ref1(x='Splat.')
-        self.assertTrue(o.bar == 'Splat.',
+        self.assert_(o.bar == 'Splat.',
                      "call through proxy not passed through to original")
 
         # expect due to too few args
@@ -270,24 +276,24 @@ class ReferencesTestCase(TestBase):
 
     def check_proxy(self, o, proxy):
         o.foo = 1
-        self.assertTrue(proxy.foo == 1,
+        self.assert_(proxy.foo == 1,
                      "proxy does not reflect attribute addition")
         o.foo = 2
-        self.assertTrue(proxy.foo == 2,
+        self.assert_(proxy.foo == 2,
                      "proxy does not reflect attribute modification")
         del o.foo
-        self.assertTrue(not hasattr(proxy, 'foo'),
+        self.assert_(not hasattr(proxy, 'foo'),
                      "proxy does not reflect attribute removal")
 
         proxy.foo = 1
-        self.assertTrue(o.foo == 1,
+        self.assert_(o.foo == 1,
                      "object does not reflect attribute addition via proxy")
         proxy.foo = 2
-        self.assertTrue(
+        self.assert_(
             o.foo == 2,
             "object does not reflect attribute modification via proxy")
         del proxy.foo
-        self.assertTrue(not hasattr(o, 'foo'),
+        self.assert_(not hasattr(o, 'foo'),
                      "object does not reflect attribute removal via proxy")
 
     def test_proxy_deletion(self):
@@ -311,21 +317,21 @@ class ReferencesTestCase(TestBase):
         o = C()
         ref1 = weakref.ref(o)
         ref2 = weakref.ref(o, self.callback)
-        self.assertTrue(weakref.getweakrefcount(o) == 2,
+        self.assert_(weakref.getweakrefcount(o) == 2,
                      "got wrong number of weak reference objects")
 
         proxy1 = weakref.proxy(o)
         proxy2 = weakref.proxy(o, self.callback)
-        self.assertTrue(weakref.getweakrefcount(o) == 4,
+        self.assert_(weakref.getweakrefcount(o) == 4,
                      "got wrong number of weak reference objects")
 
         del ref1, ref2, proxy1, proxy2
-        self.assertTrue(weakref.getweakrefcount(o) == 0,
+        self.assert_(weakref.getweakrefcount(o) == 0,
                      "weak reference objects not unlinked from"
                      " referent when discarded.")
 
         # assumes ints do not support weakrefs
-        self.assertTrue(weakref.getweakrefcount(1) == 0,
+        self.assert_(weakref.getweakrefcount(1) == 0,
                      "got wrong number of weak reference objects for int")
 
     def test_getweakrefs(self):
@@ -333,22 +339,22 @@ class ReferencesTestCase(TestBase):
         ref1 = weakref.ref(o, self.callback)
         ref2 = weakref.ref(o, self.callback)
         del ref1
-        self.assertTrue(weakref.getweakrefs(o) == [ref2],
+        self.assert_(weakref.getweakrefs(o) == [ref2],
                      "list of refs does not match")
 
         o = C()
         ref1 = weakref.ref(o, self.callback)
         ref2 = weakref.ref(o, self.callback)
         del ref2
-        self.assertTrue(weakref.getweakrefs(o) == [ref1],
+        self.assert_(weakref.getweakrefs(o) == [ref1],
                      "list of refs does not match")
 
         del ref1
-        self.assertTrue(weakref.getweakrefs(o) == [],
+        self.assert_(weakref.getweakrefs(o) == [],
                      "list of refs not cleared")
 
         # assumes ints do not support weakrefs
-        self.assertTrue(weakref.getweakrefs(1) == [],
+        self.assert_(weakref.getweakrefs(1) == [],
                      "list of refs does not match for int")
 
     def test_newstyle_number_ops(self):
@@ -356,8 +362,8 @@ class ReferencesTestCase(TestBase):
             pass
         f = F(2.0)
         p = weakref.proxy(f)
-        self.assertTrue(p + 1.0 == 3.0)
-        self.assertTrue(1.0 + p == 3.0)  # this used to SEGV
+        self.assert_(p + 1.0 == 3.0)
+        self.assert_(1.0 + p == 3.0)  # this used to SEGV
 
     def test_callbacks_protected(self):
         # Callbacks protected from already-set exceptions?
@@ -610,7 +616,7 @@ class ReferencesTestCase(TestBase):
         c.wr = weakref.ref(d, callback)     # this won't trigger
         d.wr = weakref.ref(callback, d.cb)  # ditto
         external_wr = weakref.ref(callback, safe_callback)  # but this will
-        self.assertTrue(external_wr() is callback)
+        self.assert_(external_wr() is callback)
 
         # The weakrefs attached to c and d should get cleared, so that
         # C.cb is never called.  But external_wr isn't part of the cyclic
@@ -680,18 +686,6 @@ class ReferencesTestCase(TestBase):
         # No exception should be raised here
         gc.collect()
 
-    def test_classes(self):
-        # Check that classes are weakrefable.
-        class A(object):
-            pass
-        l = []
-        weakref.ref(int)
-        a = weakref.ref(A, l.append)
-        A = None
-        gc.collect()
-        self.assertEqual(a(), None)
-        self.assertEqual(l, [a])
-
 
 class SubclassableWeakrefTestCase(TestBase):
 
@@ -699,18 +693,18 @@ class SubclassableWeakrefTestCase(TestBase):
         class MyRef(weakref.ref):
             def __init__(self, ob, callback=None, value=42):
                 self.value = value
-                super().__init__(ob, callback)
+                super(MyRef, self).__init__(ob, callback)
             def __call__(self):
                 self.called = True
-                return super().__call__()
+                return super(MyRef, self).__call__()
         o = Object("foo")
         mr = MyRef(o, value=24)
-        self.assertTrue(mr() is o)
-        self.assertTrue(mr.called)
+        self.assert_(mr() is o)
+        self.assert_(mr.called)
         self.assertEqual(mr.value, 24)
         del o
-        self.assertTrue(mr() is None)
-        self.assertTrue(mr.called)
+        self.assert_(mr() is None)
+        self.assert_(mr.called)
 
     def test_subclass_refs_dont_replace_standard_refs(self):
         class MyRef(weakref.ref):
@@ -718,16 +712,16 @@ class SubclassableWeakrefTestCase(TestBase):
         o = Object(42)
         r1 = MyRef(o)
         r2 = weakref.ref(o)
-        self.assertTrue(r1 is not r2)
+        self.assert_(r1 is not r2)
         self.assertEqual(weakref.getweakrefs(o), [r2, r1])
         self.assertEqual(weakref.getweakrefcount(o), 2)
         r3 = MyRef(o)
         self.assertEqual(weakref.getweakrefcount(o), 3)
         refs = weakref.getweakrefs(o)
         self.assertEqual(len(refs), 3)
-        self.assertTrue(r2 is refs[0])
-        self.assertIn(r1, refs[1:])
-        self.assertIn(r3, refs[1:])
+        self.assert_(r2 is refs[0])
+        self.assert_(r1 in refs[1:])
+        self.assert_(r3 in refs[1:])
 
     def test_subclass_refs_dont_conflate_callbacks(self):
         class MyRef(weakref.ref):
@@ -735,10 +729,10 @@ class SubclassableWeakrefTestCase(TestBase):
         o = Object(42)
         r1 = MyRef(o, id)
         r2 = MyRef(o, str)
-        self.assertTrue(r1 is not r2)
+        self.assert_(r1 is not r2)
         refs = weakref.getweakrefs(o)
-        self.assertIn(r1, refs)
-        self.assertIn(r2, refs)
+        self.assert_(r1 in refs)
+        self.assert_(r2 in refs)
 
     def test_subclass_refs_with_slots(self):
         class MyRef(weakref.ref):
@@ -755,7 +749,7 @@ class SubclassableWeakrefTestCase(TestBase):
         self.assertEqual(r.slot1, "abc")
         self.assertEqual(r.slot2, "def")
         self.assertEqual(r.meth(), "abcdef")
-        self.assertFalse(hasattr(r, "__dict__"))
+        self.failIf(hasattr(r, "__dict__"))
 
     def test_subclass_refs_with_cycle(self):
         # Bug #3110
@@ -801,16 +795,6 @@ class Object:
         self.arg = arg
     def __repr__(self):
         return "<Object %r>" % self.arg
-    def __eq__(self, other):
-        if isinstance(other, Object):
-            return self.arg == other.arg
-        return NotImplemented
-    def __lt__(self, other):
-        if isinstance(other, Object):
-            return self.arg < other.arg
-        return NotImplemented
-    def __hash__(self):
-        return hash(self.arg)
 
 
 class MappingTestCase(TestBase):
@@ -823,22 +807,23 @@ class MappingTestCase(TestBase):
         #
         dict, objects = self.make_weak_valued_dict()
         for o in objects:
-            self.assertEqual(weakref.getweakrefcount(o), 1)
-            self.assertTrue(o is dict[o.arg],
+            self.assert_(weakref.getweakrefcount(o) == 1,
+                         "wrong number of weak references to %r!" % o)
+            self.assert_(o is dict[o.arg],
                          "wrong object returned by weak dict!")
-        items1 = list(dict.items())
-        items2 = list(dict.copy().items())
+        items1 = dict.items()
+        items2 = dict.copy().items()
         items1.sort()
         items2.sort()
-        self.assertEqual(items1, items2,
+        self.assert_(items1 == items2,
                      "cloning of weak-valued dictionary did not work!")
         del items1, items2
-        self.assertEqual(len(dict), self.COUNT)
+        self.assert_(len(dict) == self.COUNT)
         del objects[0]
-        self.assertEqual(len(dict), self.COUNT - 1,
+        self.assert_(len(dict) == (self.COUNT - 1),
                      "deleting object did not cause dictionary update")
         del objects, o
-        self.assertEqual(len(dict), 0,
+        self.assert_(len(dict) == 0,
                      "deleting the values did not clear the dictionary")
         # regression on SF bug #447152:
         dict = weakref.WeakValueDictionary()
@@ -849,30 +834,30 @@ class MappingTestCase(TestBase):
     def test_weak_keys(self):
         #
         #  This exercises d.copy(), d.items(), d[] = v, d[], del d[],
-        #  len(d), k in d.
+        #  len(d), in d.
         #
         dict, objects = self.make_weak_keyed_dict()
         for o in objects:
-            self.assertTrue(weakref.getweakrefcount(o) == 1,
+            self.assert_(weakref.getweakrefcount(o) == 1,
                          "wrong number of weak references to %r!" % o)
-            self.assertTrue(o.arg is dict[o],
+            self.assert_(o.arg is dict[o],
                          "wrong object returned by weak dict!")
         items1 = dict.items()
         items2 = dict.copy().items()
-        self.assertEqual(set(items1), set(items2),
+        self.assert_(set(items1) == set(items2),
                      "cloning of weak-keyed dictionary did not work!")
         del items1, items2
-        self.assertEqual(len(dict), self.COUNT)
+        self.assert_(len(dict) == self.COUNT)
         del objects[0]
-        self.assertTrue(len(dict) == (self.COUNT - 1),
+        self.assert_(len(dict) == (self.COUNT - 1),
                      "deleting object did not cause dictionary update")
         del objects, o
-        self.assertTrue(len(dict) == 0,
+        self.assert_(len(dict) == 0,
                      "deleting the keys did not clear the dictionary")
         o = Object(42)
         dict[o] = "What is the meaning of the universe?"
-        self.assertIn(o, dict)
-        self.assertNotIn(34, dict)
+        self.assertTrue(o in dict)
+        self.assertTrue(34 not in dict)
 
     def test_weak_keyed_iters(self):
         dict, objects = self.make_weak_keyed_dict()
@@ -884,19 +869,17 @@ class MappingTestCase(TestBase):
         objects2 = list(objects)
         for wr in refs:
             ob = wr()
-            self.assertIn(ob, dict)
-            self.assertIn(ob, dict)
+            self.assertTrue(ob in dict)
             self.assertEqual(ob.arg, dict[ob])
             objects2.remove(ob)
         self.assertEqual(len(objects2), 0)
 
         # Test iterkeyrefs()
         objects2 = list(objects)
-        self.assertEqual(len(list(dict.keyrefs())), len(objects))
-        for wr in dict.keyrefs():
+        self.assertEqual(len(list(dict.iterkeyrefs())), len(objects))
+        for wr in dict.iterkeyrefs():
             ob = wr()
-            self.assertIn(ob, dict)
-            self.assertIn(ob, dict)
+            self.assertTrue(ob in dict)
             self.assertEqual(ob.arg, dict[ob])
             objects2.remove(ob)
         self.assertEqual(len(objects2), 0)
@@ -928,143 +911,51 @@ class MappingTestCase(TestBase):
 
     def check_iters(self, dict):
         # item iterator:
-        items = list(dict.items())
-        for item in dict.items():
+        items = dict.items()
+        for item in dict.iteritems():
             items.remove(item)
-        self.assertFalse(items, "items() did not touch all items")
+        self.assert_(len(items) == 0, "iteritems() did not touch all items")
 
         # key iterator, via __iter__():
-        keys = list(dict.keys())
+        keys = dict.keys()
         for k in dict:
             keys.remove(k)
-        self.assertFalse(keys, "__iter__() did not touch all keys")
+        self.assert_(len(keys) == 0, "__iter__() did not touch all keys")
 
         # key iterator, via iterkeys():
-        keys = list(dict.keys())
-        for k in dict.keys():
+        keys = dict.keys()
+        for k in dict.iterkeys():
             keys.remove(k)
-        self.assertFalse(keys, "iterkeys() did not touch all keys")
+        self.assert_(len(keys) == 0, "iterkeys() did not touch all keys")
 
         # value iterator:
-        values = list(dict.values())
-        for v in dict.values():
+        values = dict.values()
+        for v in dict.itervalues():
             values.remove(v)
-        self.assertFalse(values,
+        self.assert_(len(values) == 0,
                      "itervalues() did not touch all values")
-
-    def check_weak_destroy_while_iterating(self, dict, objects, iter_name):
-        n = len(dict)
-        it = iter(getattr(dict, iter_name)())
-        next(it)             # Trigger internal iteration
-        # Destroy an object
-        del objects[-1]
-        gc.collect()    # just in case
-        # We have removed either the first consumed object, or another one
-        self.assertIn(len(list(it)), [len(objects), len(objects) - 1])
-        del it
-        # The removal has been committed
-        self.assertEqual(len(dict), n - 1)
-
-    def check_weak_destroy_and_mutate_while_iterating(self, dict, testcontext):
-        # Check that we can explicitly mutate the weak dict without
-        # interfering with delayed removal.
-        # `testcontext` should create an iterator, destroy one of the
-        # weakref'ed objects and then return a new key/value pair corresponding
-        # to the destroyed object.
-        with testcontext() as (k, v):
-            self.assertNotIn(k, dict)
-        with testcontext() as (k, v):
-            self.assertRaises(KeyError, dict.__delitem__, k)
-        self.assertNotIn(k, dict)
-        with testcontext() as (k, v):
-            self.assertRaises(KeyError, dict.pop, k)
-        self.assertNotIn(k, dict)
-        with testcontext() as (k, v):
-            dict[k] = v
-        self.assertEqual(dict[k], v)
-        ddict = copy.copy(dict)
-        with testcontext() as (k, v):
-            dict.update(ddict)
-        self.assertEqual(dict, ddict)
-        with testcontext() as (k, v):
-            dict.clear()
-        self.assertEqual(len(dict), 0)
-
-    def test_weak_keys_destroy_while_iterating(self):
-        # Issue #7105: iterators shouldn't crash when a key is implicitly removed
-        dict, objects = self.make_weak_keyed_dict()
-        self.check_weak_destroy_while_iterating(dict, objects, 'keys')
-        self.check_weak_destroy_while_iterating(dict, objects, 'items')
-        self.check_weak_destroy_while_iterating(dict, objects, 'values')
-        self.check_weak_destroy_while_iterating(dict, objects, 'keyrefs')
-        dict, objects = self.make_weak_keyed_dict()
-        @contextlib.contextmanager
-        def testcontext():
-            try:
-                it = iter(dict.items())
-                next(it)
-                # Schedule a key/value for removal and recreate it
-                v = objects.pop().arg
-                gc.collect()      # just in case
-                yield Object(v), v
-            finally:
-                it = None           # should commit all removals
-        self.check_weak_destroy_and_mutate_while_iterating(dict, testcontext)
-
-    def test_weak_values_destroy_while_iterating(self):
-        # Issue #7105: iterators shouldn't crash when a key is implicitly removed
-        dict, objects = self.make_weak_valued_dict()
-        self.check_weak_destroy_while_iterating(dict, objects, 'keys')
-        self.check_weak_destroy_while_iterating(dict, objects, 'items')
-        self.check_weak_destroy_while_iterating(dict, objects, 'values')
-        self.check_weak_destroy_while_iterating(dict, objects, 'itervaluerefs')
-        self.check_weak_destroy_while_iterating(dict, objects, 'valuerefs')
-        dict, objects = self.make_weak_valued_dict()
-        @contextlib.contextmanager
-        def testcontext():
-            try:
-                it = iter(dict.items())
-                next(it)
-                # Schedule a key/value for removal and recreate it
-                k = objects.pop().arg
-                gc.collect()      # just in case
-                yield k, Object(k)
-            finally:
-                it = None           # should commit all removals
-        self.check_weak_destroy_and_mutate_while_iterating(dict, testcontext)
 
     def test_make_weak_keyed_dict_from_dict(self):
         o = Object(3)
         dict = weakref.WeakKeyDictionary({o:364})
-        self.assertEqual(dict[o], 364)
+        self.assert_(dict[o] == 364)
 
     def test_make_weak_keyed_dict_from_weak_keyed_dict(self):
         o = Object(3)
         dict = weakref.WeakKeyDictionary({o:364})
         dict2 = weakref.WeakKeyDictionary(dict)
-        self.assertEqual(dict[o], 364)
+        self.assert_(dict[o] == 364)
 
     def make_weak_keyed_dict(self):
         dict = weakref.WeakKeyDictionary()
-        objects = list(map(Object, range(self.COUNT)))
+        objects = map(Object, range(self.COUNT))
         for o in objects:
             dict[o] = o.arg
         return dict, objects
 
-    def test_make_weak_valued_dict_from_dict(self):
-        o = Object(3)
-        dict = weakref.WeakValueDictionary({364:o})
-        self.assertEqual(dict[364], o)
-
-    def test_make_weak_valued_dict_from_weak_valued_dict(self):
-        o = Object(3)
-        dict = weakref.WeakValueDictionary({364:o})
-        dict2 = weakref.WeakValueDictionary(dict)
-        self.assertEqual(dict[364], o)
-
     def make_weak_valued_dict(self):
         dict = weakref.WeakValueDictionary()
-        objects = list(map(Object, range(self.COUNT)))
+        objects = map(Object, range(self.COUNT))
         for o in objects:
             dict[o.arg] = o
         return dict, objects
@@ -1073,19 +964,19 @@ class MappingTestCase(TestBase):
         weakdict = klass()
         weakdict[key1] = value1
         weakdict[key2] = value2
-        self.assertEqual(len(weakdict), 2)
+        self.assert_(len(weakdict) == 2)
         k, v = weakdict.popitem()
-        self.assertEqual(len(weakdict), 1)
+        self.assert_(len(weakdict) == 1)
         if k is key1:
-            self.assertTrue(v is value1)
+            self.assert_(v is value1)
         else:
-            self.assertTrue(v is value2)
+            self.assert_(v is value2)
         k, v = weakdict.popitem()
-        self.assertEqual(len(weakdict), 0)
+        self.assert_(len(weakdict) == 0)
         if k is key1:
-            self.assertTrue(v is value1)
+            self.assert_(v is value1)
         else:
-            self.assertTrue(v is value2)
+            self.assert_(v is value2)
 
     def test_weak_valued_dict_popitem(self):
         self.check_popitem(weakref.WeakValueDictionary,
@@ -1096,19 +987,19 @@ class MappingTestCase(TestBase):
                            C(), "value 1", C(), "value 2")
 
     def check_setdefault(self, klass, key, value1, value2):
-        self.assertTrue(value1 is not value2,
+        self.assert_(value1 is not value2,
                      "invalid test"
                      " -- value parameters must be distinct objects")
         weakdict = klass()
         o = weakdict.setdefault(key, value1)
         self.assertTrue(o is value1)
-        self.assertIn(key, weakdict)
+        self.assertTrue(key in weakdict)
         self.assertTrue(weakdict.get(key) is value1)
         self.assertTrue(weakdict[key] is value1)
 
         o = weakdict.setdefault(key, value2)
         self.assertTrue(o is value1)
-        self.assertIn(key, weakdict)
+        self.assertTrue(key in weakdict)
         self.assertTrue(weakdict.get(key) is value1)
         self.assertTrue(weakdict[key] is value1)
 
@@ -1122,19 +1013,21 @@ class MappingTestCase(TestBase):
 
     def check_update(self, klass, dict):
         #
-        #  This exercises d.update(), len(d), d.keys(), k in d,
+        #  This exercises d.update(), len(d), d.keys(), in d,
         #  d.get(), d[].
         #
         weakdict = klass()
         weakdict.update(dict)
         self.assertEqual(len(weakdict), len(dict))
         for k in weakdict.keys():
-            self.assertIn(k, dict, "mysterious new key appeared in weak dict")
+            self.assertTrue(k in dict,
+                         "mysterious new key appeared in weak dict")
             v = dict.get(k)
             self.assertTrue(v is weakdict[k])
             self.assertTrue(v is weakdict.get(k))
         for k in dict.keys():
-            self.assertIn(k, weakdict, "original key disappeared in weak dict")
+            self.assertTrue(k in weakdict,
+                         "original key disappeared in weak dict")
             v = dict[k]
             self.assertTrue(v is weakdict[k])
             self.assertTrue(v is weakdict.get(k))
@@ -1153,10 +1046,10 @@ class MappingTestCase(TestBase):
         o2 = Object('2')
         d[o1] = 'something'
         d[o2] = 'something'
-        self.assertEqual(len(d), 2)
+        self.assert_(len(d) == 2)
         del d[o1]
-        self.assertEqual(len(d), 1)
-        self.assertEqual(list(d.keys()), [o2])
+        self.assert_(len(d) == 1)
+        self.assert_(d.keys() == [o2])
 
     def test_weak_valued_delitem(self):
         d = weakref.WeakValueDictionary()
@@ -1164,10 +1057,10 @@ class MappingTestCase(TestBase):
         o2 = Object('2')
         d['something'] = o1
         d['something else'] = o2
-        self.assertEqual(len(d), 2)
+        self.assert_(len(d) == 2)
         del d['something']
-        self.assertEqual(len(d), 1)
-        self.assertTrue(list(d.items()) == [('something else', o2)])
+        self.assert_(len(d) == 1)
+        self.assert_(d.items() == [('something else', o2)])
 
     def test_weak_keyed_bad_delitem(self):
         d = weakref.WeakKeyDictionary()
@@ -1208,7 +1101,7 @@ class MappingTestCase(TestBase):
             d[o] = o.value
         del o   # now the only strong references to keys are in objs
         # Find the order in which iterkeys sees the keys.
-        objs = list(d.keys())
+        objs = d.keys()
         # Reverse it, so that the iteration implementation of __delitem__
         # has to keep looping to find the first object we delete.
         objs.reverse()
@@ -1252,7 +1145,7 @@ libreftest = """ Doctest for examples in the library reference: weakref.rst
 ...
 >>> obj = Dict(red=1, green=2, blue=3)   # this object is weak referencable
 >>> r = weakref.ref(obj)
->>> print(r() is obj)
+>>> print r() is obj
 True
 
 >>> import weakref
@@ -1265,21 +1158,21 @@ True
 >>> o is o2
 True
 >>> del o, o2
->>> print(r())
+>>> print r()
 None
 
 >>> import weakref
 >>> class ExtendedRef(weakref.ref):
 ...     def __init__(self, ob, callback=None, **annotations):
-...         super().__init__(ob, callback)
+...         super(ExtendedRef, self).__init__(ob, callback)
 ...         self.__counter = 0
-...         for k, v in annotations.items():
+...         for k, v in annotations.iteritems():
 ...             setattr(self, k, v)
 ...     def __call__(self):
 ...         '''Return a pair containing the referent and the number of
 ...         times the reference has been called.
 ...         '''
-...         ob = super().__call__()
+...         ob = super(ExtendedRef, self).__call__()
 ...         if ob is not None:
 ...             self.__counter += 1
 ...             ob = (ob, self.__counter)
@@ -1320,9 +1213,9 @@ True
 >>> try:
 ...     id2obj(a_id)
 ... except KeyError:
-...     print('OK')
+...     print 'OK'
 ... else:
-...     print('WeakValueDictionary error')
+...     print 'WeakValueDictionary error'
 OK
 
 """
@@ -1330,14 +1223,14 @@ OK
 __test__ = {'libreftest' : libreftest}
 
 def test_main():
-    support.run_unittest(
+    test_support.run_unittest(
         ReferencesTestCase,
         MappingTestCase,
         WeakValueDictionaryTestCase,
         WeakKeyDictionaryTestCase,
         SubclassableWeakrefTestCase,
         )
-    support.run_doctest(sys.modules[__name__])
+    test_support.run_doctest(sys.modules[__name__])
 
 
 if __name__ == "__main__":

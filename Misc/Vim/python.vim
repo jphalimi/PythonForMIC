@@ -63,17 +63,17 @@ endif
 
 if exists("python_highlight_builtins")
   syn keyword pythonBuiltin    Ellipsis False None NotImplemented True __debug__
-  syn keyword pythonBuiltin    __import__ abs all any bool
-  syn keyword pythonBuiltin    buffer callable chr classmethod cmp
-  syn keyword pythonBuiltin    complex copyright credits delattr dict
-  syn keyword pythonBuiltin    dir divmod enumerate eval exec exit
+  syn keyword pythonBuiltin    __import__ abs all any apply basestring bool
+  syn keyword pythonBuiltin    buffer bytes callable chr classmethod cmp coerce
+  syn keyword pythonBuiltin    compile complex copyright credits delattr dict
+  syn keyword pythonBuiltin    dir divmod enumerate eval execfile exit file
   syn keyword pythonBuiltin    filter float frozenset getattr globals hasattr
-  syn keyword pythonBuiltin    hash help hex id int isinstance
-  syn keyword pythonBuiltin    issubclass iter len license list locals map
+  syn keyword pythonBuiltin    hash help hex id input int intern isinstance
+  syn keyword pythonBuiltin    issubclass iter len license list locals long map
   syn keyword pythonBuiltin    max min object oct open ord pow property quit
-  syn keyword pythonBuiltin    range reload repr reversed round
+  syn keyword pythonBuiltin    range raw_input reduce reload repr reversed round
   syn keyword pythonBuiltin    set setattr slice sorted staticmethod str sum
-  syn keyword pythonBuiltin    super trunc tuple type unicode vars 
+  syn keyword pythonBuiltin    super trunc tuple type unichr unicode vars xrange
   syn keyword pythonBuiltin    zip
 
 endif
@@ -89,7 +89,7 @@ if exists("python_highlight_exceptions")
   syn keyword pythonException    MemoryError NameError NotImplementedError
   syn keyword pythonException    OSError OverflowError PendingDeprecationWarning
   syn keyword pythonException    ReferenceError RuntimeError RuntimeWarning
-  syn keyword pythonException    StopIteration SyntaxError
+  syn keyword pythonException    StandardError StopIteration SyntaxError
   syn keyword pythonException    SyntaxWarning SystemError SystemExit TabError
   syn keyword pythonException    TypeError UnboundLocalError UnicodeDecodeError
   syn keyword pythonException    UnicodeEncodeError UnicodeError

@@ -1,17 +1,16 @@
-from test import support
+from test import test_support
 import unittest
-
-crypt = support.import_module('crypt')
+import crypt
 
 class CryptTestCase(unittest.TestCase):
 
     def test_crypt(self):
         c = crypt.crypt('mypassword', 'ab')
-        if support.verbose:
-            print('Test encryption: ', c)
+        if test_support.verbose:
+            print 'Test encryption: ', c
 
 def test_main():
-    support.run_unittest(CryptTestCase)
+    test_support.run_unittest(CryptTestCase)
 
 if __name__ == "__main__":
     test_main()

@@ -12,7 +12,7 @@
 
 
 #ifdef AIX_GENUINE_CPLUSPLUS
-#include <load.h>
+#include "/usr/lpp/xlC/include/load.h"
 #define aix_load loadAndInit
 #else
 #define aix_load load

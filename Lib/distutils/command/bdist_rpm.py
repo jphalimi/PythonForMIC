@@ -3,7 +3,12 @@
 Implements the Distutils 'bdist_rpm' command (create RPM source and binary
 distributions)."""
 
-import sys, os
+# This module should be kept compatible with Python 2.1.
+
+__revision__ = "$Id: bdist_rpm.py 61000 2008-02-23 17:40:11Z christian.heimes $"
+
+import sys, os, string
+from types import *
 from distutils.core import Command
 from distutils.debug import DEBUG
 from distutils.util import get_platform
@@ -12,7 +17,7 @@ from distutils.errors import *
 from distutils.sysconfig import get_python_version
 from distutils import log
 
-class bdist_rpm(Command):
+class bdist_rpm (Command):
 
     description = "create an RPM distribution"
 
@@ -120,20 +125,17 @@ class bdist_rpm(Command):
         # Allow a packager to explicitly force an architecture
         ('force-arch=', None,
          "Force an architecture onto the RPM build process"),
-
-        ('quiet', 'q',
-         "Run the INSTALL phase of RPM building in quiet mode"),
-        ]
+       ]
 
     boolean_options = ['keep-temp', 'use-rpm-opt-flags', 'rpm3-mode',
-                       'no-autoreq', 'quiet']
+                       'no-autoreq']
 
     negative_opt = {'no-keep-temp': 'keep-temp',
                     'no-rpm-opt-flags': 'use-rpm-opt-flags',
                     'rpm2-mode': 'rpm3-mode'}
 
 
-    def initialize_options(self):
+    def initialize_options (self):
         self.bdist_base = None
         self.rpm_base = None
         self.dist_dir = None
@@ -176,14 +178,16 @@ class bdist_rpm(Command):
         self.no_autoreq = 0
 
         self.force_arch = None
-        self.quiet = 0
 
-    def finalize_options(self):
+    # initialize_options()
+
+
+    def finalize_options (self):
         self.set_undefined_options('bdist', ('bdist_base', 'bdist_base'))
         if self.rpm_base is None:
             if not self.rpm3_mode:
-                raise DistutilsOptionError(
-                      "you must specify --rpm-base in RPM 2 mode")
+                raise DistutilsOptionError, \
+                      "you must specify --rpm-base in RPM 2 mode"
             self.rpm_base = os.path.join(self.bdist_base, "rpm")
 
         if self.python is None:
@@ -192,15 +196,16 @@ class bdist_rpm(Command):
             else:
                 self.python = "python"
         elif self.fix_python:
-            raise DistutilsOptionError(
-                  "--python and --fix-python are mutually exclusive options")
+            raise DistutilsOptionError, \
+                  "--python and --fix-python are mutually exclusive options"
 
         if os.name != 'posix':
-            raise DistutilsPlatformError("don't know how to create RPM "
+            raise DistutilsPlatformError, \
+                  ("don't know how to create RPM "
                    "distributions on platform %s" % os.name)
         if self.binary_only and self.source_only:
-            raise DistutilsOptionError(
-                  "cannot supply both '--source-only' and '--binary-only'")
+            raise DistutilsOptionError, \
+                  "cannot supply both '--source-only' and '--binary-only'"
 
         # don't pass CFLAGS to pure python distributions
         if not self.distribution.has_ext_modules():
@@ -209,14 +214,16 @@ class bdist_rpm(Command):
         self.set_undefined_options('bdist', ('dist_dir', 'dist_dir'))
         self.finalize_package_data()
 
-    def finalize_package_data(self):
+    # finalize_options()
+
+    def finalize_package_data (self):
         self.ensure_string('group', "Development/Libraries")
         self.ensure_string('vendor',
                            "%s <%s>" % (self.distribution.get_contact(),
                                         self.distribution.get_contact_email()))
         self.ensure_string('packager')
         self.ensure_string_list('doc_files')
-        if isinstance(self.doc_files, list):
+        if type(self.doc_files) is ListType:
             for readme in ('README', 'README.txt'):
                 if os.path.exists(readme) and readme not in self.doc_files:
                     self.doc_files.append(readme)
@@ -253,14 +260,17 @@ class bdist_rpm(Command):
         self.ensure_string_list('obsoletes')
 
         self.ensure_string('force_arch')
+    # finalize_package_data ()
 
-    def run(self):
+
+    def run (self):
+
         if DEBUG:
-            print("before _get_package_data():")
-            print("vendor =", self.vendor)
-            print("packager =", self.packager)
-            print("doc_files =", self.doc_files)
-            print("changelog =", self.changelog)
+            print "before _get_package_data():"
+            print "vendor =", self.vendor
+            print "packager =", self.packager
+            print "doc_files =", self.doc_files
+            print "changelog =", self.changelog
 
         # make directories
         if self.spec_only:
@@ -304,8 +314,9 @@ class bdist_rpm(Command):
             if os.path.exists(self.icon):
                 self.copy_file(self.icon, source_dir)
             else:
-                raise DistutilsFileError(
-                      "icon file '%s' does not exist" % self.icon)
+                raise DistutilsFileError, \
+                      "icon file '%s' does not exist" % self.icon
+
 
         # build package
         log.info("building RPMs")
@@ -313,7 +324,6 @@ class bdist_rpm(Command):
         if os.path.exists('/usr/bin/rpmbuild') or \
            os.path.exists('/bin/rpmbuild'):
             rpm_cmd = ['rpmbuild']
-
         if self.source_only: # what kind of RPMs?
             rpm_cmd.append('-bs')
         elif self.binary_only:
@@ -325,10 +335,6 @@ class bdist_rpm(Command):
                              '_topdir %s' % os.path.abspath(self.rpm_base)])
         if not self.keep_temp:
             rpm_cmd.append('--clean')
-
-        if self.quiet:
-            rpm_cmd.append('--quiet')
-
         rpm_cmd.append(spec_path)
         # Determine the binary rpm names that should be built out of this spec
         # file
@@ -341,26 +347,22 @@ class bdist_rpm(Command):
             src_rpm, non_src_rpm, spec_path)
 
         out = os.popen(q_cmd)
-        try:
-            binary_rpms = []
-            source_rpm = None
-            while True:
-                line = out.readline()
-                if not line:
-                    break
-                l = line.strip().split()
-                assert(len(l) == 2)
-                binary_rpms.append(l[1])
-                # The source rpm is named after the first entry in the spec file
-                if source_rpm is None:
-                    source_rpm = l[0]
+        binary_rpms = []
+        source_rpm = None
+        while 1:
+            line = out.readline()
+            if not line:
+                break
+            l = string.split(string.strip(line))
+            assert(len(l) == 2)
+            binary_rpms.append(l[1])
+            # The source rpm is named after the first entry in the spec file
+            if source_rpm is None:
+                source_rpm = l[0]
 
-            status = out.close()
-            if status:
-                raise DistutilsExecError("Failed to execute: %s" % repr(q_cmd))
-
-        finally:
-            out.close()
+        status = out.close()
+        if status:
+            raise DistutilsExecError("Failed to execute: %s" % repr(q_cmd))
 
         self.spawn(rpm_cmd)
 
@@ -375,6 +377,7 @@ class bdist_rpm(Command):
                     rpm = os.path.join(rpm_dir['RPMS'], rpm)
                     if os.path.exists(rpm):
                         self.move_file(rpm, self.dist_dir)
+    # run()
 
     def _dist_path(self, path):
         return os.path.join(self.dist_dir, os.path.basename(path))
@@ -433,9 +436,9 @@ class bdist_rpm(Command):
                       'Conflicts',
                       'Obsoletes',
                       ):
-            val = getattr(self, field.lower())
-            if isinstance(val, list):
-                spec_file.append('%s: %s' % (field, ' '.join(val)))
+            val = getattr(self, string.lower(field))
+            if type(val) is ListType:
+                spec_file.append('%s: %s' % (field, string.join(val)))
             elif val is not None:
                 spec_file.append('%s: %s' % (field, val))
 
@@ -448,7 +451,7 @@ class bdist_rpm(Command):
 
         if self.build_requires:
             spec_file.append('BuildRequires: ' +
-                             ' '.join(self.build_requires))
+                             string.join(self.build_requires))
 
         if self.icon:
             spec_file.append('Icon: ' + os.path.basename(self.icon))
@@ -485,13 +488,13 @@ class bdist_rpm(Command):
         # that we open and interpolate into the spec file, but the defaults
         # are just text that we drop in as-is.  Hmmm.
 
-        install_cmd = ('%s install -O1 --root=$RPM_BUILD_ROOT '
-                       '--record=INSTALLED_FILES') % def_setup_call
-
         script_options = [
             ('prep', 'prep_script', "%setup -n %{name}-%{unmangled_version}"),
             ('build', 'build_script', def_build),
-            ('install', 'install_script', install_cmd),
+            ('install', 'install_script',
+             ("%s install "
+              "--root=$RPM_BUILD_ROOT "
+              "--record=INSTALLED_FILES") % def_setup_call),
             ('clean', 'clean_script', "rm -rf $RPM_BUILD_ROOT"),
             ('verifyscript', 'verify_script', None),
             ('pre', 'pre_install', None),
@@ -509,7 +512,7 @@ class bdist_rpm(Command):
                     '',
                     '%' + rpm_opt,])
                 if val:
-                    spec_file.extend(open(val, 'r').read().split('\n'))
+                    spec_file.extend(string.split(open(val, 'r').read(), '\n'))
                 else:
                     spec_file.append(default)
 
@@ -522,7 +525,7 @@ class bdist_rpm(Command):
             ])
 
         if self.doc_files:
-            spec_file.append('%doc ' + ' '.join(self.doc_files))
+            spec_file.append('%doc ' + string.join(self.doc_files))
 
         if self.changelog:
             spec_file.extend([
@@ -532,14 +535,16 @@ class bdist_rpm(Command):
 
         return spec_file
 
+    # _make_spec_file ()
+
     def _format_changelog(self, changelog):
         """Format the changelog correctly and convert it to a list of strings
         """
         if not changelog:
             return changelog
         new_changelog = []
-        for line in changelog.strip().split('\n'):
-            line = line.strip()
+        for line in string.split(string.strip(changelog), '\n'):
+            line = string.strip(line)
             if line[0] == '*':
                 new_changelog.extend(['', line])
             elif line[0] == '-':
@@ -552,3 +557,7 @@ class bdist_rpm(Command):
             del new_changelog[0]
 
         return new_changelog
+
+    # _format_changelog()
+
+# class bdist_rpm

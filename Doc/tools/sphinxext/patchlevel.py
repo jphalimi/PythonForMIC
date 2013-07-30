@@ -41,7 +41,7 @@ def get_header_version_info(srcdir):
     suffixes = {
         'PY_RELEASE_LEVEL_ALPHA': 'a',
         'PY_RELEASE_LEVEL_BETA':  'b',
-        'PY_RELEASE_LEVEL_GAMMA': 'rc',
+        'PY_RELEASE_LEVEL_GAMMA': 'c',
         }
     if level != 'PY_RELEASE_LEVEL_FINAL':
         release += suffixes[level] + str(int(d['PY_RELEASE_SERIAL']))
@@ -68,4 +68,4 @@ def get_version_info():
         return version, release
 
 if __name__ == '__main__':
-    print(get_header_version_info('.')[1])
+    print get_header_version_info('.')[1]

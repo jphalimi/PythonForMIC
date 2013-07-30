@@ -26,7 +26,6 @@ help:
 	@echo "  htmlhelp   to make HTML files and a HTML help project"
 	@echo "  latex      to make LaTeX files, you can set PAPER=a4 or PAPER=letter"
 	@echo "  text       to make plain text files"
-	@echo "  epub       to make EPUB files"
 	@echo "  changes    to make an overview over all changed/added/deprecated items"
 	@echo "  linkcheck  to check all external links for integrity"
 	@echo "  coverage   to check documentation coverage for library and C API"
@@ -35,13 +34,12 @@ help:
 	@echo "  dist       to create a \"dist\" directory with archived docs for download"
 	@echo "  suspicious to check for suspicious markup in output text"
 	@echo "  check      to run a check for frequent markup errors"
-	@echo "  serve      to serve the documentation on the localhost (8000)"
 
 # Note: if you update versions here, do the same in make.bat and README.txt
 checkout:
 	@if [ ! -d tools/sphinx ]; then \
 	  echo "Checking out Sphinx..."; \
-	  svn checkout $(SVNROOT)/external/Sphinx-1.0.7/sphinx tools/sphinx; \
+	  svn checkout $(SVNROOT)/external/Sphinx-0.6.5/sphinx tools/sphinx; \
 	fi
 	@if [ ! -d tools/docutils ]; then \
 	  echo "Checking out Docutils..."; \
@@ -82,24 +80,19 @@ text: BUILDER = text
 text: build
 	@echo "Build finished; the text files are in build/text."
 
-epub: BUILDER = epub
-epub: build
-	@echo "Build finished; the epub files are in build/epub."
-
 changes: BUILDER = changes
 changes: build
 	@echo "The overview file is in build/changes."
 
 linkcheck: BUILDER = linkcheck
 linkcheck: build
-	@echo "Link check complete; look for any errors in the above output" \
+	@echo "Link check complete; look for any errors in the above output " \
 	      "or in build/$(BUILDER)/output.txt"
 
 suspicious: BUILDER = suspicious
 suspicious: build
-	@echo "Suspicious check complete; look for any errors in the above output" \
-	      "or in build/$(BUILDER)/suspicious.csv.  If all issues are false" \
-	      "positives, append that file to tools/sphinxext/susp-ignored.csv."
+	@echo "Suspicious check complete; look for any errors in the above output " \
+	      "or in build/$(BUILDER)/suspicious.txt"
 
 coverage: BUILDER = coverage
 coverage: build
@@ -107,13 +100,13 @@ coverage: build
 
 doctest: BUILDER = doctest
 doctest: build
-	@echo "Testing of doctests in the sources finished, look at the" \
+	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in build/doctest/output.txt"
 
 pydoc-topics: BUILDER = pydoc-topics
 pydoc-topics: build
-	@echo "Building finished; now copy build/pydoc-topics/topics.py" \
-	      "to ../Lib/pydoc_data/topics.py"
+	@echo "Building finished; now copy build/pydoc-topics/pydoc_topics.py " \
+	      "into the Lib/ directory"
 
 htmlview: html
 	 $(PYTHON) -c "import webbrowser; webbrowser.open('build/html/index.html')"
@@ -126,7 +119,7 @@ clean:
 	-rm -rf tools/docutils
 
 dist:
-	rm -rf dist
+	-rm -rf dist
 	mkdir -p dist
 
 	# archive the HTML
@@ -146,9 +139,9 @@ dist:
 	(cd dist; zip -q -r -9 python-$(DISTVERSION)-docs-text.zip python-$(DISTVERSION)-docs-text)
 	rm -r dist/python-$(DISTVERSION)-docs-text
 	rm dist/python-$(DISTVERSION)-docs-text.tar
-
+	
 	# archive the A4 latex
-	rm -rf build/latex
+	-rm -r build/latex
 	make latex PAPER=a4
 	-sed -i 's/makeindex/makeindex -q/' build/latex/Makefile
 	(cd build/latex; make clean && make all-pdf && make FMT=pdf zip bz2)
@@ -156,29 +149,15 @@ dist:
 	cp build/latex/docs-pdf.tar.bz2 dist/python-$(DISTVERSION)-docs-pdf-a4.tar.bz2
 
 	# archive the letter latex
-	rm -rf build/latex
+	rm -r build/latex
 	make latex PAPER=letter
 	-sed -i 's/makeindex/makeindex -q/' build/latex/Makefile
 	(cd build/latex; make clean && make all-pdf && make FMT=pdf zip bz2)
 	cp build/latex/docs-pdf.zip dist/python-$(DISTVERSION)-docs-pdf-letter.zip
 	cp build/latex/docs-pdf.tar.bz2 dist/python-$(DISTVERSION)-docs-pdf-letter.tar.bz2
 
-	# archive the epub build
-	rm -rf build/epub
-	make epub
-	mkdir -p dist/python-$(DISTVERSION)-docs-epub
-	cp -pPR build/epub/*.epub dist/python-$(DISTVERSION)-docs-epub/
-	tar -C dist -cf dist/python-$(DISTVERSION)-docs-epub.tar python-$(DISTVERSION)-docs-epub
-	bzip2 -9 -k dist/python-$(DISTVERSION)-docs-epub.tar
-	(cd dist; zip -q -r -9 python-$(DISTVERSION)-docs-epub.zip python-$(DISTVERSION)-docs-epub)
-	rm -r dist/python-$(DISTVERSION)-docs-epub
-	rm dist/python-$(DISTVERSION)-docs-epub.tar
-
 check:
 	$(PYTHON) tools/rstlint.py -i tools
-
-serve:
-	../Tools/scripts/serve.py build/html
 
 # Targets for daily automated doc build
 

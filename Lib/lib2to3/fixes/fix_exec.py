@@ -16,7 +16,6 @@ from ..fixer_util import Comma, Name, Call
 
 
 class FixExec(fixer_base.BaseFix):
-    BM_compatible = True
 
     PATTERN = """
     exec_stmt< 'exec' a=any 'in' b=any [',' c=any] >
@@ -37,4 +36,4 @@ class FixExec(fixer_base.BaseFix):
         if c is not None:
             args.extend([Comma(), c.clone()])
 
-        return Call(Name("exec"), args, prefix=node.prefix)
+        return Call(Name(u"exec"), args, prefix=node.prefix)

@@ -12,29 +12,30 @@ for older versions of VS in distutils.msvccompiler.
 #   finding DevStudio (through the registry)
 # ported to VS2005 and VS 2008 by Christian Heimes
 
+__revision__ = "$Id: msvc9compiler.py 82132 2010-06-21 15:39:28Z benjamin.peterson $"
+
 import os
 import subprocess
 import sys
 import re
-
-from distutils.errors import DistutilsExecError, DistutilsPlatformError, \
-                             CompileError, LibError, LinkError
-from distutils.ccompiler import CCompiler, gen_preprocess_options, \
-                                gen_lib_options
+from distutils.errors import (DistutilsExecError, DistutilsPlatformError,
+    CompileError, LibError, LinkError)
+from distutils.ccompiler import (CCompiler, gen_preprocess_options,
+    gen_lib_options)
 from distutils import log
 from distutils.util import get_platform
 
-import winreg
+import _winreg
 
-RegOpenKeyEx = winreg.OpenKeyEx
-RegEnumKey = winreg.EnumKey
-RegEnumValue = winreg.EnumValue
-RegError = winreg.error
+RegOpenKeyEx = _winreg.OpenKeyEx
+RegEnumKey = _winreg.EnumKey
+RegEnumValue = _winreg.EnumValue
+RegError = _winreg.error
 
-HKEYS = (winreg.HKEY_USERS,
-         winreg.HKEY_CURRENT_USER,
-         winreg.HKEY_LOCAL_MACHINE,
-         winreg.HKEY_CLASSES_ROOT)
+HKEYS = (_winreg.HKEY_USERS,
+         _winreg.HKEY_CURRENT_USER,
+         _winreg.HKEY_LOCAL_MACHINE,
+         _winreg.HKEY_CLASSES_ROOT)
 
 NATIVE_WIN64 = (sys.platform == 'win32' and sys.maxsize > 2**32)
 if NATIVE_WIN64:
@@ -62,14 +63,15 @@ class Reg:
     """Helper class to read values from the registry
     """
 
+    @classmethod
     def get_value(cls, path, key):
         for base in HKEYS:
             d = cls.read_values(base, path)
             if d and key in d:
                 return d[key]
         raise KeyError(key)
-    get_value = classmethod(get_value)
 
+    @classmethod
     def read_keys(cls, base, key):
         """Return list of registry keys."""
         try:
@@ -86,8 +88,8 @@ class Reg:
             L.append(k)
             i += 1
         return L
-    read_keys = classmethod(read_keys)
 
+    @classmethod
     def read_values(cls, base, key):
         """Return dict of registry keys and values.
 
@@ -108,8 +110,8 @@ class Reg:
             d[cls.convert_mbcs(name)] = cls.convert_mbcs(value)
             i += 1
         return d
-    read_values = classmethod(read_values)
 
+    @staticmethod
     def convert_mbcs(s):
         dec = getattr(s, "decode", None)
         if dec is not None:
@@ -118,7 +120,6 @@ class Reg:
             except UnicodeError:
                 pass
         return s
-    convert_mbcs = staticmethod(convert_mbcs)
 
 class MacroExpander:
 
@@ -140,7 +141,7 @@ class MacroExpander:
                                "sdkinstallrootv2.0")
             else:
                 raise KeyError("sdkinstallrootv2.0")
-        except KeyError:
+        except KeyError as exc: #
             raise DistutilsPlatformError(
             """Python was built with Visual Studio 2008;
 extensions must be built with a compiler than can generate compatible binaries.
@@ -261,27 +262,23 @@ def query_vcvarsall(version, arch="x86"):
     popen = subprocess.Popen('"%s" %s & set' % (vcvarsall, arch),
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
-    try:
-        stdout, stderr = popen.communicate()
-        if popen.wait() != 0:
-            raise DistutilsPlatformError(stderr.decode("mbcs"))
 
-        stdout = stdout.decode("mbcs")
-        for line in stdout.split("\n"):
-            line = Reg.convert_mbcs(line)
-            if '=' not in line:
-                continue
-            line = line.strip()
-            key, value = line.split('=', 1)
-            key = key.lower()
-            if key in interesting:
-                if value.endswith(os.pathsep):
-                    value = value[:-1]
-                result[key] = removeDuplicates(value)
+    stdout, stderr = popen.communicate()
+    if popen.wait() != 0:
+        raise DistutilsPlatformError(stderr.decode("mbcs"))
 
-    finally:
-        popen.stdout.close()
-        popen.stderr.close()
+    stdout = stdout.decode("mbcs")
+    for line in stdout.split("\n"):
+        line = Reg.convert_mbcs(line)
+        if '=' not in line:
+            continue
+        line = line.strip()
+        key, value = line.split('=', 1)
+        key = key.lower()
+        if key in interesting:
+            if value.endswith(os.pathsep):
+                value = value[:-1]
+            result[key] = removeDuplicates(value)
 
     if len(result) != len(interesting):
         raise ValueError(str(list(result.keys())))
@@ -370,9 +367,10 @@ class MSVCCompiler(CCompiler) :
 
             vc_env = query_vcvarsall(VERSION, plat_spec)
 
-            self.__paths = vc_env['path'].split(os.pathsep)
-            os.environ['lib'] = vc_env['lib']
-            os.environ['include'] = vc_env['include']
+            # take care to only use strings in the environment.
+            self.__paths = vc_env['path'].encode('mbcs').split(os.pathsep)
+            os.environ['lib'] = vc_env['lib'].encode('mbcs')
+            os.environ['include'] = vc_env['include'].encode('mbcs')
 
             if len(self.__paths) == 0:
                 raise DistutilsPlatformError("Python was built with %s, "
@@ -657,8 +655,28 @@ class MSVCCompiler(CCompiler) :
                 mfid = 1
             else:
                 mfid = 2
-                # Remove references to the Visual C runtime
-                self._remove_visual_c_ref(temp_manifest)
+                try:
+                    # Remove references to the Visual C runtime, so they will
+                    # fall through to the Visual C dependency of Python.exe.
+                    # This way, when installed for a restricted user (e.g.
+                    # runtimes are not in WinSxS folder, but in Python's own
+                    # folder), the runtimes do not need to be in every folder
+                    # with .pyd's.
+                    manifest_f = open(temp_manifest, "rb")
+                    manifest_buf = manifest_f.read()
+                    manifest_f.close()
+                    pattern = re.compile(
+                        r"""<assemblyIdentity.*?name=("|')Microsoft\."""\
+                        r"""VC\d{2}\.CRT("|').*?(/>|</assemblyIdentity>)""",
+                        re.DOTALL)
+                    manifest_buf = re.sub(pattern, "", manifest_buf)
+                    pattern = "<dependentAssembly>\s*</dependentAssembly>"
+                    manifest_buf = re.sub(pattern, "", manifest_buf)
+                    manifest_f = open(temp_manifest, "wb")
+                    manifest_f.write(manifest_buf)
+                    manifest_f.close()
+                except IOError:
+                    pass
             out_arg = '-outputresource:%s;%s' % (output_filename, mfid)
             try:
                 self.spawn(['mt.exe', '-nologo', '-manifest',
@@ -668,33 +686,6 @@ class MSVCCompiler(CCompiler) :
         else:
             log.debug("skipping %s (up-to-date)", output_filename)
 
-    def _remove_visual_c_ref(self, manifest_file):
-        try:
-            # Remove references to the Visual C runtime, so they will
-            # fall through to the Visual C dependency of Python.exe.
-            # This way, when installed for a restricted user (e.g.
-            # runtimes are not in WinSxS folder, but in Python's own
-            # folder), the runtimes do not need to be in every folder
-            # with .pyd's.
-            manifest_f = open(manifest_file)
-            try:
-                manifest_buf = manifest_f.read()
-            finally:
-                manifest_f.close()
-            pattern = re.compile(
-                r"""<assemblyIdentity.*?name=("|')Microsoft\."""\
-                r"""VC\d{2}\.CRT("|').*?(/>|</assemblyIdentity>)""",
-                re.DOTALL)
-            manifest_buf = re.sub(pattern, "", manifest_buf)
-            pattern = "<dependentAssembly>\s*</dependentAssembly>"
-            manifest_buf = re.sub(pattern, "", manifest_buf)
-            manifest_f = open(manifest_file, 'w')
-            try:
-                manifest_f.write(manifest_buf)
-            finally:
-                manifest_f.close()
-        except IOError:
-            pass
 
     # -- Miscellaneous methods -----------------------------------------
     # These are all used by the 'gen_lib_options() function, in

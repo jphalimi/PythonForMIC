@@ -55,9 +55,9 @@ def _open_terminal():
         pass
     else:
         try:
-            tty_name, master_fd = sgi._getpty(os.O_RDWR, 0o666, 0)
-        except IOError as msg:
-            raise os.error(msg)
+            tty_name, master_fd = sgi._getpty(os.O_RDWR, 0666, 0)
+        except IOError, msg:
+            raise os.error, msg
         return master_fd, tty_name
     for x in 'pqrstuvwxyzPQRST':
         for y in '0123456789abcdef':
@@ -67,7 +67,7 @@ def _open_terminal():
             except os.error:
                 continue
             return (fd, '/dev/tty' + x + y)
-    raise os.error('out of pty devices')
+    raise os.error, 'out of pty devices'
 
 def slave_open(tty_name):
     """slave_open(tty_name) -> slave_fd
@@ -129,7 +129,7 @@ def fork():
 
 def _writen(fd, data):
     """Write all the data to a descriptor."""
-    while data:
+    while data != '':
         n = os.write(fd, data)
         data = data[n:]
 

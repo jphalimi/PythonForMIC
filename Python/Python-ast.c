@@ -2,7 +2,7 @@
 
 
 /*
-   __version__ 82163.
+   __version__ 62047.
 
    This module must be committed separately after each AST grammar change;
    The __version__ number is set to the revision number of the commit
@@ -43,15 +43,11 @@ static char *FunctionDef_fields[]={
         "args",
         "body",
         "decorator_list",
-        "returns",
 };
 static PyTypeObject *ClassDef_type;
 static char *ClassDef_fields[]={
         "name",
         "bases",
-        "keywords",
-        "starargs",
-        "kwargs",
         "body",
         "decorator_list",
 };
@@ -73,6 +69,12 @@ static char *AugAssign_fields[]={
         "target",
         "op",
         "value",
+};
+static PyTypeObject *Print_type;
+static char *Print_fields[]={
+        "dest",
+        "values",
+        "nl",
 };
 static PyTypeObject *For_type;
 static char *For_fields[]={
@@ -101,8 +103,9 @@ static char *With_fields[]={
 };
 static PyTypeObject *Raise_type;
 static char *Raise_fields[]={
-        "exc",
-        "cause",
+        "type",
+        "inst",
+        "tback",
 };
 static PyTypeObject *TryExcept_type;
 static char *TryExcept_fields[]={
@@ -130,12 +133,14 @@ static char *ImportFrom_fields[]={
         "names",
         "level",
 };
+static PyTypeObject *Exec_type;
+static char *Exec_fields[]={
+        "body",
+        "globals",
+        "locals",
+};
 static PyTypeObject *Global_type;
 static char *Global_fields[]={
-        "names",
-};
-static PyTypeObject *Nonlocal_type;
-static char *Nonlocal_fields[]={
         "names",
 };
 static PyTypeObject *Expr_type;
@@ -183,24 +188,9 @@ static char *Dict_fields[]={
         "keys",
         "values",
 };
-static PyTypeObject *Set_type;
-static char *Set_fields[]={
-        "elts",
-};
 static PyTypeObject *ListComp_type;
 static char *ListComp_fields[]={
         "elt",
-        "generators",
-};
-static PyTypeObject *SetComp_type;
-static char *SetComp_fields[]={
-        "elt",
-        "generators",
-};
-static PyTypeObject *DictComp_type;
-static char *DictComp_fields[]={
-        "key",
-        "value",
         "generators",
 };
 static PyTypeObject *GeneratorExp_type;
@@ -226,6 +216,10 @@ static char *Call_fields[]={
         "starargs",
         "kwargs",
 };
+static PyTypeObject *Repr_type;
+static char *Repr_fields[]={
+        "value",
+};
 static PyTypeObject *Num_type;
 static char *Num_fields[]={
         "n",
@@ -234,11 +228,6 @@ static PyTypeObject *Str_type;
 static char *Str_fields[]={
         "s",
 };
-static PyTypeObject *Bytes_type;
-static char *Bytes_fields[]={
-        "s",
-};
-static PyTypeObject *Ellipsis_type;
 static PyTypeObject *Attribute_type;
 static char *Attribute_fields[]={
         "value",
@@ -249,11 +238,6 @@ static PyTypeObject *Subscript_type;
 static char *Subscript_fields[]={
         "value",
         "slice",
-        "ctx",
-};
-static PyTypeObject *Starred_type;
-static char *Starred_fields[]={
-        "value",
         "ctx",
 };
 static PyTypeObject *Name_type;
@@ -283,6 +267,7 @@ static PyTypeObject *AugStore_type;
 static PyTypeObject *Param_type;
 static PyTypeObject *slice_type;
 static PyObject* ast2obj_slice(void*);
+static PyTypeObject *Ellipsis_type;
 static PyTypeObject *Slice_type;
 static char *Slice_fields[]={
         "lower",
@@ -367,18 +352,8 @@ static PyObject* ast2obj_arguments(void*);
 static char *arguments_fields[]={
         "args",
         "vararg",
-        "varargannotation",
-        "kwonlyargs",
         "kwarg",
-        "kwargannotation",
         "defaults",
-        "kw_defaults",
-};
-static PyTypeObject *arg_type;
-static PyObject* ast2obj_arg(void*);
-static char *arg_fields[]={
-        "arg",
-        "annotation",
 };
 static PyTypeObject *keyword_type;
 static PyObject* ast2obj_keyword(void*);
@@ -479,7 +454,7 @@ static PyTypeObject AST_type = {
     0,                       /* tp_print */
     0,                       /* tp_getattr */
     0,                       /* tp_setattr */
-    0,                       /* tp_reserved */
+    0,                       /* tp_compare */
     0,                       /* tp_repr */
     0,                       /* tp_as_number */
     0,                       /* tp_as_sequence */
@@ -520,7 +495,7 @@ static PyTypeObject* make_type(char *type, PyTypeObject* base, char**fields, int
     fnames = PyTuple_New(num_fields);
     if (!fnames) return NULL;
     for (i = 0; i < num_fields; i++) {
-        PyObject *field = PyUnicode_FromString(fields[i]);
+        PyObject *field = PyString_FromString(fields[i]);
         if (!field) {
             Py_DECREF(fnames);
             return NULL;
@@ -537,10 +512,9 @@ static int add_attributes(PyTypeObject* type, char**attrs, int num_fields)
 {
     int i, result;
     PyObject *s, *l = PyTuple_New(num_fields);
-    if (!l)
-        return 0;
-    for (i = 0; i < num_fields; i++) {
-        s = PyUnicode_FromString(attrs[i]);
+    if (!l) return 0;
+    for(i = 0; i < num_fields; i++) {
+        s = PyString_FromString(attrs[i]);
         if (!s) {
             Py_DECREF(l);
             return 0;
@@ -581,10 +555,14 @@ static PyObject* ast2obj_object(void *o)
 }
 #define ast2obj_identifier ast2obj_object
 #define ast2obj_string ast2obj_object
+static PyObject* ast2obj_bool(bool b)
+{
+    return PyBool_FromLong(b);
+}
 
 static PyObject* ast2obj_int(long b)
 {
-    return PyLong_FromLong(b);
+    return PyInt_FromLong(b);
 }
 
 /* Conversion Python -> AST */
@@ -600,32 +578,17 @@ static int obj2ast_object(PyObject* obj, PyObject** out, PyArena* arena)
     return 0;
 }
 
-static int obj2ast_identifier(PyObject* obj, PyObject** out, PyArena* arena)
-{
-    if (!PyUnicode_CheckExact(obj) && obj != Py_None) {
-        PyErr_SetString(PyExc_TypeError, "AST identifier must be of type str");
-        return 1;
-    }
-    return obj2ast_object(obj, out, arena);
-}
-
-static int obj2ast_string(PyObject* obj, PyObject** out, PyArena* arena)
-{
-    if (!PyUnicode_CheckExact(obj) && !PyBytes_CheckExact(obj)) {
-        PyErr_SetString(PyExc_TypeError, "AST string must be of type str");
-        return 1;
-    }
-    return obj2ast_object(obj, out, arena);
-}
+#define obj2ast_identifier obj2ast_object
+#define obj2ast_string obj2ast_object
 
 static int obj2ast_int(PyObject* obj, int* out, PyArena* arena)
 {
     int i;
-    if (!PyLong_Check(obj)) {
+    if (!PyInt_Check(obj) && !PyLong_Check(obj)) {
         PyObject *s = PyObject_Repr(obj);
         if (s == NULL) return 1;
         PyErr_Format(PyExc_ValueError, "invalid integer value: %.400s",
-                     PyBytes_AS_STRING(s));
+                     PyString_AS_STRING(s));
         Py_DECREF(s);
         return 1;
     }
@@ -634,6 +597,21 @@ static int obj2ast_int(PyObject* obj, int* out, PyArena* arena)
     if (i == -1 && PyErr_Occurred())
         return 1;
     *out = i;
+    return 0;
+}
+
+static int obj2ast_bool(PyObject* obj, bool* out, PyArena* arena)
+{
+    if (!PyBool_Check(obj)) {
+        PyObject *s = PyObject_Repr(obj);
+        if (s == NULL) return 1;
+        PyErr_Format(PyExc_ValueError, "invalid boolean value: %.400s",
+                     PyString_AS_STRING(s));
+        Py_DECREF(s);
+        return 1;
+    }
+
+    *out = (obj == Py_True);
     return 0;
 }
 
@@ -677,9 +655,9 @@ static int init_types(void)
         if (!stmt_type) return 0;
         if (!add_attributes(stmt_type, stmt_attributes, 2)) return 0;
         FunctionDef_type = make_type("FunctionDef", stmt_type,
-                                     FunctionDef_fields, 5);
+                                     FunctionDef_fields, 4);
         if (!FunctionDef_type) return 0;
-        ClassDef_type = make_type("ClassDef", stmt_type, ClassDef_fields, 7);
+        ClassDef_type = make_type("ClassDef", stmt_type, ClassDef_fields, 4);
         if (!ClassDef_type) return 0;
         Return_type = make_type("Return", stmt_type, Return_fields, 1);
         if (!Return_type) return 0;
@@ -689,6 +667,8 @@ static int init_types(void)
         if (!Assign_type) return 0;
         AugAssign_type = make_type("AugAssign", stmt_type, AugAssign_fields, 3);
         if (!AugAssign_type) return 0;
+        Print_type = make_type("Print", stmt_type, Print_fields, 3);
+        if (!Print_type) return 0;
         For_type = make_type("For", stmt_type, For_fields, 4);
         if (!For_type) return 0;
         While_type = make_type("While", stmt_type, While_fields, 3);
@@ -697,7 +677,7 @@ static int init_types(void)
         if (!If_type) return 0;
         With_type = make_type("With", stmt_type, With_fields, 3);
         if (!With_type) return 0;
-        Raise_type = make_type("Raise", stmt_type, Raise_fields, 2);
+        Raise_type = make_type("Raise", stmt_type, Raise_fields, 3);
         if (!Raise_type) return 0;
         TryExcept_type = make_type("TryExcept", stmt_type, TryExcept_fields, 3);
         if (!TryExcept_type) return 0;
@@ -711,10 +691,10 @@ static int init_types(void)
         ImportFrom_type = make_type("ImportFrom", stmt_type, ImportFrom_fields,
                                     3);
         if (!ImportFrom_type) return 0;
+        Exec_type = make_type("Exec", stmt_type, Exec_fields, 3);
+        if (!Exec_type) return 0;
         Global_type = make_type("Global", stmt_type, Global_fields, 1);
         if (!Global_type) return 0;
-        Nonlocal_type = make_type("Nonlocal", stmt_type, Nonlocal_fields, 1);
-        if (!Nonlocal_type) return 0;
         Expr_type = make_type("Expr", stmt_type, Expr_fields, 1);
         if (!Expr_type) return 0;
         Pass_type = make_type("Pass", stmt_type, NULL, 0);
@@ -738,14 +718,8 @@ static int init_types(void)
         if (!IfExp_type) return 0;
         Dict_type = make_type("Dict", expr_type, Dict_fields, 2);
         if (!Dict_type) return 0;
-        Set_type = make_type("Set", expr_type, Set_fields, 1);
-        if (!Set_type) return 0;
         ListComp_type = make_type("ListComp", expr_type, ListComp_fields, 2);
         if (!ListComp_type) return 0;
-        SetComp_type = make_type("SetComp", expr_type, SetComp_fields, 2);
-        if (!SetComp_type) return 0;
-        DictComp_type = make_type("DictComp", expr_type, DictComp_fields, 3);
-        if (!DictComp_type) return 0;
         GeneratorExp_type = make_type("GeneratorExp", expr_type,
                                       GeneratorExp_fields, 2);
         if (!GeneratorExp_type) return 0;
@@ -755,20 +729,16 @@ static int init_types(void)
         if (!Compare_type) return 0;
         Call_type = make_type("Call", expr_type, Call_fields, 5);
         if (!Call_type) return 0;
+        Repr_type = make_type("Repr", expr_type, Repr_fields, 1);
+        if (!Repr_type) return 0;
         Num_type = make_type("Num", expr_type, Num_fields, 1);
         if (!Num_type) return 0;
         Str_type = make_type("Str", expr_type, Str_fields, 1);
         if (!Str_type) return 0;
-        Bytes_type = make_type("Bytes", expr_type, Bytes_fields, 1);
-        if (!Bytes_type) return 0;
-        Ellipsis_type = make_type("Ellipsis", expr_type, NULL, 0);
-        if (!Ellipsis_type) return 0;
         Attribute_type = make_type("Attribute", expr_type, Attribute_fields, 3);
         if (!Attribute_type) return 0;
         Subscript_type = make_type("Subscript", expr_type, Subscript_fields, 3);
         if (!Subscript_type) return 0;
-        Starred_type = make_type("Starred", expr_type, Starred_fields, 2);
-        if (!Starred_type) return 0;
         Name_type = make_type("Name", expr_type, Name_fields, 2);
         if (!Name_type) return 0;
         List_type = make_type("List", expr_type, List_fields, 2);
@@ -805,6 +775,8 @@ static int init_types(void)
         slice_type = make_type("slice", &AST_type, NULL, 0);
         if (!slice_type) return 0;
         if (!add_attributes(slice_type, NULL, 0)) return 0;
+        Ellipsis_type = make_type("Ellipsis", slice_type, NULL, 0);
+        if (!Ellipsis_type) return 0;
         Slice_type = make_type("Slice", slice_type, Slice_fields, 3);
         if (!Slice_type) return 0;
         ExtSlice_type = make_type("ExtSlice", slice_type, ExtSlice_fields, 1);
@@ -945,10 +917,8 @@ static int init_types(void)
         ExceptHandler_type = make_type("ExceptHandler", excepthandler_type,
                                        ExceptHandler_fields, 3);
         if (!ExceptHandler_type) return 0;
-        arguments_type = make_type("arguments", &AST_type, arguments_fields, 8);
+        arguments_type = make_type("arguments", &AST_type, arguments_fields, 4);
         if (!arguments_type) return 0;
-        arg_type = make_type("arg", &AST_type, arg_fields, 2);
-        if (!arg_type) return 0;
         keyword_type = make_type("keyword", &AST_type, keyword_fields, 2);
         if (!keyword_type) return 0;
         alias_type = make_type("alias", &AST_type, alias_fields, 2);
@@ -972,7 +942,6 @@ static int obj2ast_comprehension(PyObject* obj, comprehension_ty* out, PyArena*
 static int obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena*
                                  arena);
 static int obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena);
-static int obj2ast_arg(PyObject* obj, arg_ty* out, PyArena* arena);
 static int obj2ast_keyword(PyObject* obj, keyword_ty* out, PyArena* arena);
 static int obj2ast_alias(PyObject* obj, alias_ty* out, PyArena* arena);
 
@@ -1031,8 +1000,7 @@ Suite(asdl_seq * body, PyArena *arena)
 
 stmt_ty
 FunctionDef(identifier name, arguments_ty args, asdl_seq * body, asdl_seq *
-            decorator_list, expr_ty returns, int lineno, int col_offset,
-            PyArena *arena)
+            decorator_list, int lineno, int col_offset, PyArena *arena)
 {
         stmt_ty p;
         if (!name) {
@@ -1053,16 +1021,14 @@ FunctionDef(identifier name, arguments_ty args, asdl_seq * body, asdl_seq *
         p->v.FunctionDef.args = args;
         p->v.FunctionDef.body = body;
         p->v.FunctionDef.decorator_list = decorator_list;
-        p->v.FunctionDef.returns = returns;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
 }
 
 stmt_ty
-ClassDef(identifier name, asdl_seq * bases, asdl_seq * keywords, expr_ty
-         starargs, expr_ty kwargs, asdl_seq * body, asdl_seq * decorator_list,
-         int lineno, int col_offset, PyArena *arena)
+ClassDef(identifier name, asdl_seq * bases, asdl_seq * body, asdl_seq *
+         decorator_list, int lineno, int col_offset, PyArena *arena)
 {
         stmt_ty p;
         if (!name) {
@@ -1076,9 +1042,6 @@ ClassDef(identifier name, asdl_seq * bases, asdl_seq * keywords, expr_ty
         p->kind = ClassDef_kind;
         p->v.ClassDef.name = name;
         p->v.ClassDef.bases = bases;
-        p->v.ClassDef.keywords = keywords;
-        p->v.ClassDef.starargs = starargs;
-        p->v.ClassDef.kwargs = kwargs;
         p->v.ClassDef.body = body;
         p->v.ClassDef.decorator_list = decorator_list;
         p->lineno = lineno;
@@ -1162,6 +1125,23 @@ AugAssign(expr_ty target, operator_ty op, expr_ty value, int lineno, int
         p->v.AugAssign.target = target;
         p->v.AugAssign.op = op;
         p->v.AugAssign.value = value;
+        p->lineno = lineno;
+        p->col_offset = col_offset;
+        return p;
+}
+
+stmt_ty
+Print(expr_ty dest, asdl_seq * values, bool nl, int lineno, int col_offset,
+      PyArena *arena)
+{
+        stmt_ty p;
+        p = (stmt_ty)PyArena_Malloc(arena, sizeof(*p));
+        if (!p)
+                return NULL;
+        p->kind = Print_kind;
+        p->v.Print.dest = dest;
+        p->v.Print.values = values;
+        p->v.Print.nl = nl;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1262,15 +1242,17 @@ With(expr_ty context_expr, expr_ty optional_vars, asdl_seq * body, int lineno,
 }
 
 stmt_ty
-Raise(expr_ty exc, expr_ty cause, int lineno, int col_offset, PyArena *arena)
+Raise(expr_ty type, expr_ty inst, expr_ty tback, int lineno, int col_offset,
+      PyArena *arena)
 {
         stmt_ty p;
         p = (stmt_ty)PyArena_Malloc(arena, sizeof(*p));
         if (!p)
                 return NULL;
         p->kind = Raise_kind;
-        p->v.Raise.exc = exc;
-        p->v.Raise.cause = cause;
+        p->v.Raise.type = type;
+        p->v.Raise.inst = inst;
+        p->v.Raise.tback = tback;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1348,6 +1330,11 @@ ImportFrom(identifier module, asdl_seq * names, int level, int lineno, int
            col_offset, PyArena *arena)
 {
         stmt_ty p;
+        if (!module) {
+                PyErr_SetString(PyExc_ValueError,
+                                "field module is required for ImportFrom");
+                return NULL;
+        }
         p = (stmt_ty)PyArena_Malloc(arena, sizeof(*p));
         if (!p)
                 return NULL;
@@ -1355,6 +1342,28 @@ ImportFrom(identifier module, asdl_seq * names, int level, int lineno, int
         p->v.ImportFrom.module = module;
         p->v.ImportFrom.names = names;
         p->v.ImportFrom.level = level;
+        p->lineno = lineno;
+        p->col_offset = col_offset;
+        return p;
+}
+
+stmt_ty
+Exec(expr_ty body, expr_ty globals, expr_ty locals, int lineno, int col_offset,
+     PyArena *arena)
+{
+        stmt_ty p;
+        if (!body) {
+                PyErr_SetString(PyExc_ValueError,
+                                "field body is required for Exec");
+                return NULL;
+        }
+        p = (stmt_ty)PyArena_Malloc(arena, sizeof(*p));
+        if (!p)
+                return NULL;
+        p->kind = Exec_kind;
+        p->v.Exec.body = body;
+        p->v.Exec.globals = globals;
+        p->v.Exec.locals = locals;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1369,20 +1378,6 @@ Global(asdl_seq * names, int lineno, int col_offset, PyArena *arena)
                 return NULL;
         p->kind = Global_kind;
         p->v.Global.names = names;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-stmt_ty
-Nonlocal(asdl_seq * names, int lineno, int col_offset, PyArena *arena)
-{
-        stmt_ty p;
-        p = (stmt_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = Nonlocal_kind;
-        p->v.Nonlocal.names = names;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1600,20 +1595,6 @@ Dict(asdl_seq * keys, asdl_seq * values, int lineno, int col_offset, PyArena
 }
 
 expr_ty
-Set(asdl_seq * elts, int lineno, int col_offset, PyArena *arena)
-{
-        expr_ty p;
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = Set_kind;
-        p->v.Set.elts = elts;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
 ListComp(expr_ty elt, asdl_seq * generators, int lineno, int col_offset,
          PyArena *arena)
 {
@@ -1629,54 +1610,6 @@ ListComp(expr_ty elt, asdl_seq * generators, int lineno, int col_offset,
         p->kind = ListComp_kind;
         p->v.ListComp.elt = elt;
         p->v.ListComp.generators = generators;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
-SetComp(expr_ty elt, asdl_seq * generators, int lineno, int col_offset, PyArena
-        *arena)
-{
-        expr_ty p;
-        if (!elt) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field elt is required for SetComp");
-                return NULL;
-        }
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = SetComp_kind;
-        p->v.SetComp.elt = elt;
-        p->v.SetComp.generators = generators;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
-DictComp(expr_ty key, expr_ty value, asdl_seq * generators, int lineno, int
-         col_offset, PyArena *arena)
-{
-        expr_ty p;
-        if (!key) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field key is required for DictComp");
-                return NULL;
-        }
-        if (!value) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field value is required for DictComp");
-                return NULL;
-        }
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = DictComp_kind;
-        p->v.DictComp.key = key;
-        p->v.DictComp.value = value;
-        p->v.DictComp.generators = generators;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1764,6 +1697,25 @@ Call(expr_ty func, asdl_seq * args, asdl_seq * keywords, expr_ty starargs,
 }
 
 expr_ty
+Repr(expr_ty value, int lineno, int col_offset, PyArena *arena)
+{
+        expr_ty p;
+        if (!value) {
+                PyErr_SetString(PyExc_ValueError,
+                                "field value is required for Repr");
+                return NULL;
+        }
+        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
+        if (!p)
+                return NULL;
+        p->kind = Repr_kind;
+        p->v.Repr.value = value;
+        p->lineno = lineno;
+        p->col_offset = col_offset;
+        return p;
+}
+
+expr_ty
 Num(object n, int lineno, int col_offset, PyArena *arena)
 {
         expr_ty p;
@@ -1796,38 +1748,6 @@ Str(string s, int lineno, int col_offset, PyArena *arena)
                 return NULL;
         p->kind = Str_kind;
         p->v.Str.s = s;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
-Bytes(string s, int lineno, int col_offset, PyArena *arena)
-{
-        expr_ty p;
-        if (!s) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field s is required for Bytes");
-                return NULL;
-        }
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = Bytes_kind;
-        p->v.Bytes.s = s;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
-Ellipsis(int lineno, int col_offset, PyArena *arena)
-{
-        expr_ty p;
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = Ellipsis_kind;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1892,32 +1812,6 @@ Subscript(expr_ty value, slice_ty slice, expr_context_ty ctx, int lineno, int
         p->v.Subscript.value = value;
         p->v.Subscript.slice = slice;
         p->v.Subscript.ctx = ctx;
-        p->lineno = lineno;
-        p->col_offset = col_offset;
-        return p;
-}
-
-expr_ty
-Starred(expr_ty value, expr_context_ty ctx, int lineno, int col_offset, PyArena
-        *arena)
-{
-        expr_ty p;
-        if (!value) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field value is required for Starred");
-                return NULL;
-        }
-        if (!ctx) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field ctx is required for Starred");
-                return NULL;
-        }
-        p = (expr_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->kind = Starred_kind;
-        p->v.Starred.value = value;
-        p->v.Starred.ctx = ctx;
         p->lineno = lineno;
         p->col_offset = col_offset;
         return p;
@@ -1992,6 +1886,17 @@ Tuple(asdl_seq * elts, expr_context_ty ctx, int lineno, int col_offset, PyArena
 }
 
 slice_ty
+Ellipsis(PyArena *arena)
+{
+        slice_ty p;
+        p = (slice_ty)PyArena_Malloc(arena, sizeof(*p));
+        if (!p)
+                return NULL;
+        p->kind = Ellipsis_kind;
+        return p;
+}
+
+slice_ty
 Slice(expr_ty lower, expr_ty upper, expr_ty step, PyArena *arena)
 {
         slice_ty p;
@@ -2058,7 +1963,7 @@ comprehension(expr_ty target, expr_ty iter, asdl_seq * ifs, PyArena *arena)
 }
 
 excepthandler_ty
-ExceptHandler(expr_ty type, identifier name, asdl_seq * body, int lineno, int
+ExceptHandler(expr_ty type, expr_ty name, asdl_seq * body, int lineno, int
               col_offset, PyArena *arena)
 {
         excepthandler_ty p;
@@ -2075,9 +1980,8 @@ ExceptHandler(expr_ty type, identifier name, asdl_seq * body, int lineno, int
 }
 
 arguments_ty
-arguments(asdl_seq * args, identifier vararg, expr_ty varargannotation,
-          asdl_seq * kwonlyargs, identifier kwarg, expr_ty kwargannotation,
-          asdl_seq * defaults, asdl_seq * kw_defaults, PyArena *arena)
+arguments(asdl_seq * args, identifier vararg, identifier kwarg, asdl_seq *
+          defaults, PyArena *arena)
 {
         arguments_ty p;
         p = (arguments_ty)PyArena_Malloc(arena, sizeof(*p));
@@ -2085,29 +1989,8 @@ arguments(asdl_seq * args, identifier vararg, expr_ty varargannotation,
                 return NULL;
         p->args = args;
         p->vararg = vararg;
-        p->varargannotation = varargannotation;
-        p->kwonlyargs = kwonlyargs;
         p->kwarg = kwarg;
-        p->kwargannotation = kwargannotation;
         p->defaults = defaults;
-        p->kw_defaults = kw_defaults;
-        return p;
-}
-
-arg_ty
-arg(identifier arg, expr_ty annotation, PyArena *arena)
-{
-        arg_ty p;
-        if (!arg) {
-                PyErr_SetString(PyExc_ValueError,
-                                "field arg is required for arg");
-                return NULL;
-        }
-        p = (arg_ty)PyArena_Malloc(arena, sizeof(*p));
-        if (!p)
-                return NULL;
-        p->arg = arg;
-        p->annotation = annotation;
         return p;
 }
 
@@ -2242,11 +2125,6 @@ ast2obj_stmt(void* _o)
                     -1)
                         goto failed;
                 Py_DECREF(value);
-                value = ast2obj_expr(o->v.FunctionDef.returns);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "returns", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
                 break;
         case ClassDef_kind:
                 result = PyType_GenericNew(ClassDef_type, NULL, NULL);
@@ -2259,21 +2137,6 @@ ast2obj_stmt(void* _o)
                 value = ast2obj_list(o->v.ClassDef.bases, ast2obj_expr);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "bases", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_list(o->v.ClassDef.keywords, ast2obj_keyword);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "keywords", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_expr(o->v.ClassDef.starargs);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "starargs", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_expr(o->v.ClassDef.kwargs);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "kwargs", value) == -1)
                         goto failed;
                 Py_DECREF(value);
                 value = ast2obj_list(o->v.ClassDef.body, ast2obj_stmt);
@@ -2337,6 +2200,25 @@ ast2obj_stmt(void* _o)
                 value = ast2obj_expr(o->v.AugAssign.value);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "value", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                break;
+        case Print_kind:
+                result = PyType_GenericNew(Print_type, NULL, NULL);
+                if (!result) goto failed;
+                value = ast2obj_expr(o->v.Print.dest);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "dest", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                value = ast2obj_list(o->v.Print.values, ast2obj_expr);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "values", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                value = ast2obj_bool(o->v.Print.nl);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "nl", value) == -1)
                         goto failed;
                 Py_DECREF(value);
                 break;
@@ -2425,14 +2307,19 @@ ast2obj_stmt(void* _o)
         case Raise_kind:
                 result = PyType_GenericNew(Raise_type, NULL, NULL);
                 if (!result) goto failed;
-                value = ast2obj_expr(o->v.Raise.exc);
+                value = ast2obj_expr(o->v.Raise.type);
                 if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "exc", value) == -1)
+                if (PyObject_SetAttrString(result, "type", value) == -1)
                         goto failed;
                 Py_DECREF(value);
-                value = ast2obj_expr(o->v.Raise.cause);
+                value = ast2obj_expr(o->v.Raise.inst);
                 if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "cause", value) == -1)
+                if (PyObject_SetAttrString(result, "inst", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                value = ast2obj_expr(o->v.Raise.tback);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "tback", value) == -1)
                         goto failed;
                 Py_DECREF(value);
                 break;
@@ -2512,19 +2399,29 @@ ast2obj_stmt(void* _o)
                         goto failed;
                 Py_DECREF(value);
                 break;
+        case Exec_kind:
+                result = PyType_GenericNew(Exec_type, NULL, NULL);
+                if (!result) goto failed;
+                value = ast2obj_expr(o->v.Exec.body);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "body", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                value = ast2obj_expr(o->v.Exec.globals);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "globals", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                value = ast2obj_expr(o->v.Exec.locals);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "locals", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                break;
         case Global_kind:
                 result = PyType_GenericNew(Global_type, NULL, NULL);
                 if (!result) goto failed;
                 value = ast2obj_list(o->v.Global.names, ast2obj_identifier);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "names", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
-        case Nonlocal_kind:
-                result = PyType_GenericNew(Nonlocal_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_list(o->v.Nonlocal.names, ast2obj_identifier);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "names", value) == -1)
                         goto failed;
@@ -2674,15 +2571,6 @@ ast2obj_expr(void* _o)
                         goto failed;
                 Py_DECREF(value);
                 break;
-        case Set_kind:
-                result = PyType_GenericNew(Set_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_list(o->v.Set.elts, ast2obj_expr);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "elts", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
         case ListComp_kind:
                 result = PyType_GenericNew(ListComp_type, NULL, NULL);
                 if (!result) goto failed;
@@ -2692,41 +2580,6 @@ ast2obj_expr(void* _o)
                         goto failed;
                 Py_DECREF(value);
                 value = ast2obj_list(o->v.ListComp.generators,
-                                     ast2obj_comprehension);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "generators", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
-        case SetComp_kind:
-                result = PyType_GenericNew(SetComp_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_expr(o->v.SetComp.elt);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "elt", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_list(o->v.SetComp.generators,
-                                     ast2obj_comprehension);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "generators", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
-        case DictComp_kind:
-                result = PyType_GenericNew(DictComp_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_expr(o->v.DictComp.key);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "key", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_expr(o->v.DictComp.value);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "value", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_list(o->v.DictComp.generators,
                                      ast2obj_comprehension);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "generators", value) == -1)
@@ -2811,6 +2664,15 @@ ast2obj_expr(void* _o)
                         goto failed;
                 Py_DECREF(value);
                 break;
+        case Repr_kind:
+                result = PyType_GenericNew(Repr_type, NULL, NULL);
+                if (!result) goto failed;
+                value = ast2obj_expr(o->v.Repr.value);
+                if (!value) goto failed;
+                if (PyObject_SetAttrString(result, "value", value) == -1)
+                        goto failed;
+                Py_DECREF(value);
+                break;
         case Num_kind:
                 result = PyType_GenericNew(Num_type, NULL, NULL);
                 if (!result) goto failed;
@@ -2828,19 +2690,6 @@ ast2obj_expr(void* _o)
                 if (PyObject_SetAttrString(result, "s", value) == -1)
                         goto failed;
                 Py_DECREF(value);
-                break;
-        case Bytes_kind:
-                result = PyType_GenericNew(Bytes_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_string(o->v.Bytes.s);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "s", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
-        case Ellipsis_kind:
-                result = PyType_GenericNew(Ellipsis_type, NULL, NULL);
-                if (!result) goto failed;
                 break;
         case Attribute_kind:
                 result = PyType_GenericNew(Attribute_type, NULL, NULL);
@@ -2875,20 +2724,6 @@ ast2obj_expr(void* _o)
                         goto failed;
                 Py_DECREF(value);
                 value = ast2obj_expr_context(o->v.Subscript.ctx);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "ctx", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                break;
-        case Starred_kind:
-                result = PyType_GenericNew(Starred_type, NULL, NULL);
-                if (!result) goto failed;
-                value = ast2obj_expr(o->v.Starred.value);
-                if (!value) goto failed;
-                if (PyObject_SetAttrString(result, "value", value) == -1)
-                        goto failed;
-                Py_DECREF(value);
-                value = ast2obj_expr_context(o->v.Starred.ctx);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "ctx", value) == -1)
                         goto failed;
@@ -2992,6 +2827,10 @@ ast2obj_slice(void* _o)
         }
 
         switch (o->kind) {
+        case Ellipsis_kind:
+                result = PyType_GenericNew(Ellipsis_type, NULL, NULL);
+                if (!result) goto failed;
+                break;
         case Slice_kind:
                 result = PyType_GenericNew(Slice_type, NULL, NULL);
                 if (!result) goto failed;
@@ -3210,7 +3049,7 @@ ast2obj_excepthandler(void* _o)
                 if (PyObject_SetAttrString(result, "type", value) == -1)
                         goto failed;
                 Py_DECREF(value);
-                value = ast2obj_identifier(o->v.ExceptHandler.name);
+                value = ast2obj_expr(o->v.ExceptHandler.name);
                 if (!value) goto failed;
                 if (PyObject_SetAttrString(result, "name", value) == -1)
                         goto failed;
@@ -3251,7 +3090,7 @@ ast2obj_arguments(void* _o)
 
         result = PyType_GenericNew(arguments_type, NULL, NULL);
         if (!result) return NULL;
-        value = ast2obj_list(o->args, ast2obj_arg);
+        value = ast2obj_list(o->args, ast2obj_expr);
         if (!value) goto failed;
         if (PyObject_SetAttrString(result, "args", value) == -1)
                 goto failed;
@@ -3261,63 +3100,14 @@ ast2obj_arguments(void* _o)
         if (PyObject_SetAttrString(result, "vararg", value) == -1)
                 goto failed;
         Py_DECREF(value);
-        value = ast2obj_expr(o->varargannotation);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "varargannotation", value) == -1)
-                goto failed;
-        Py_DECREF(value);
-        value = ast2obj_list(o->kwonlyargs, ast2obj_arg);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "kwonlyargs", value) == -1)
-                goto failed;
-        Py_DECREF(value);
         value = ast2obj_identifier(o->kwarg);
         if (!value) goto failed;
         if (PyObject_SetAttrString(result, "kwarg", value) == -1)
                 goto failed;
         Py_DECREF(value);
-        value = ast2obj_expr(o->kwargannotation);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "kwargannotation", value) == -1)
-                goto failed;
-        Py_DECREF(value);
         value = ast2obj_list(o->defaults, ast2obj_expr);
         if (!value) goto failed;
         if (PyObject_SetAttrString(result, "defaults", value) == -1)
-                goto failed;
-        Py_DECREF(value);
-        value = ast2obj_list(o->kw_defaults, ast2obj_expr);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "kw_defaults", value) == -1)
-                goto failed;
-        Py_DECREF(value);
-        return result;
-failed:
-        Py_XDECREF(value);
-        Py_XDECREF(result);
-        return NULL;
-}
-
-PyObject*
-ast2obj_arg(void* _o)
-{
-        arg_ty o = (arg_ty)_o;
-        PyObject *result = NULL, *value = NULL;
-        if (!o) {
-                Py_INCREF(Py_None);
-                return Py_None;
-        }
-
-        result = PyType_GenericNew(arg_type, NULL, NULL);
-        if (!result) return NULL;
-        value = ast2obj_identifier(o->arg);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "arg", value) == -1)
-                goto failed;
-        Py_DECREF(value);
-        value = ast2obj_expr(o->annotation);
-        if (!value) goto failed;
-        if (PyObject_SetAttrString(result, "annotation", value) == -1)
                 goto failed;
         Py_DECREF(value);
         return result;
@@ -3389,9 +3179,9 @@ failed:
 int
 obj2ast_mod(PyObject* obj, mod_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
-        PyObject *tmp = NULL;
 
         if (obj == Py_None) {
                 *out = NULL;
@@ -3529,8 +3319,10 @@ obj2ast_mod(PyObject* obj, mod_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of mod, but got %R", obj);
-        failed:
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of mod, but got %.400s", PyString_AS_STRING(tmp));
+failed:
         Py_XDECREF(tmp);
         return 1;
 }
@@ -3538,9 +3330,9 @@ obj2ast_mod(PyObject* obj, mod_ty* out, PyArena* arena)
 int
 obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
-        PyObject *tmp = NULL;
         int lineno;
         int col_offset;
 
@@ -3581,7 +3373,6 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                 arguments_ty args;
                 asdl_seq* body;
                 asdl_seq* decorator_list;
-                expr_ty returns;
 
                 if (PyObject_HasAttrString(obj, "name")) {
                         int res;
@@ -3657,19 +3448,8 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                         PyErr_SetString(PyExc_TypeError, "required field \"decorator_list\" missing from FunctionDef");
                         return 1;
                 }
-                if (PyObject_HasAttrString(obj, "returns")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "returns");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &returns, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        returns = NULL;
-                }
-                *out = FunctionDef(name, args, body, decorator_list, returns,
-                                   lineno, col_offset, arena);
+                *out = FunctionDef(name, args, body, decorator_list, lineno,
+                                   col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -3680,9 +3460,6 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
         if (isinstance) {
                 identifier name;
                 asdl_seq* bases;
-                asdl_seq* keywords;
-                expr_ty starargs;
-                expr_ty kwargs;
                 asdl_seq* body;
                 asdl_seq* decorator_list;
 
@@ -3722,53 +3499,6 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                 } else {
                         PyErr_SetString(PyExc_TypeError, "required field \"bases\" missing from ClassDef");
                         return 1;
-                }
-                if (PyObject_HasAttrString(obj, "keywords")) {
-                        int res;
-                        Py_ssize_t len;
-                        Py_ssize_t i;
-                        tmp = PyObject_GetAttrString(obj, "keywords");
-                        if (tmp == NULL) goto failed;
-                        if (!PyList_Check(tmp)) {
-                                PyErr_Format(PyExc_TypeError, "ClassDef field \"keywords\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                                goto failed;
-                        }
-                        len = PyList_GET_SIZE(tmp);
-                        keywords = asdl_seq_new(len, arena);
-                        if (keywords == NULL) goto failed;
-                        for (i = 0; i < len; i++) {
-                                keyword_ty value;
-                                res = obj2ast_keyword(PyList_GET_ITEM(tmp, i), &value, arena);
-                                if (res != 0) goto failed;
-                                asdl_seq_SET(keywords, i, value);
-                        }
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"keywords\" missing from ClassDef");
-                        return 1;
-                }
-                if (PyObject_HasAttrString(obj, "starargs")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "starargs");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &starargs, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        starargs = NULL;
-                }
-                if (PyObject_HasAttrString(obj, "kwargs")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "kwargs");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &kwargs, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        kwargs = NULL;
                 }
                 if (PyObject_HasAttrString(obj, "body")) {
                         int res;
@@ -3820,8 +3550,8 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                         PyErr_SetString(PyExc_TypeError, "required field \"decorator_list\" missing from ClassDef");
                         return 1;
                 }
-                *out = ClassDef(name, bases, keywords, starargs, kwargs, body,
-                                decorator_list, lineno, col_offset, arena);
+                *out = ClassDef(name, bases, body, decorator_list, lineno,
+                                col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -3978,6 +3708,67 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                         return 1;
                 }
                 *out = AugAssign(target, op, value, lineno, col_offset, arena);
+                if (*out == NULL) goto failed;
+                return 0;
+        }
+        isinstance = PyObject_IsInstance(obj, (PyObject*)Print_type);
+        if (isinstance == -1) {
+                return 1;
+        }
+        if (isinstance) {
+                expr_ty dest;
+                asdl_seq* values;
+                bool nl;
+
+                if (PyObject_HasAttrString(obj, "dest")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "dest");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &dest, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        dest = NULL;
+                }
+                if (PyObject_HasAttrString(obj, "values")) {
+                        int res;
+                        Py_ssize_t len;
+                        Py_ssize_t i;
+                        tmp = PyObject_GetAttrString(obj, "values");
+                        if (tmp == NULL) goto failed;
+                        if (!PyList_Check(tmp)) {
+                                PyErr_Format(PyExc_TypeError, "Print field \"values\" must be a list, not a %.200s", tmp->ob_type->tp_name);
+                                goto failed;
+                        }
+                        len = PyList_GET_SIZE(tmp);
+                        values = asdl_seq_new(len, arena);
+                        if (values == NULL) goto failed;
+                        for (i = 0; i < len; i++) {
+                                expr_ty value;
+                                res = obj2ast_expr(PyList_GET_ITEM(tmp, i), &value, arena);
+                                if (res != 0) goto failed;
+                                asdl_seq_SET(values, i, value);
+                        }
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        PyErr_SetString(PyExc_TypeError, "required field \"values\" missing from Print");
+                        return 1;
+                }
+                if (PyObject_HasAttrString(obj, "nl")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "nl");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_bool(tmp, &nl, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        PyErr_SetString(PyExc_TypeError, "required field \"nl\" missing from Print");
+                        return 1;
+                }
+                *out = Print(dest, values, nl, lineno, col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -4287,32 +4078,44 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                 return 1;
         }
         if (isinstance) {
-                expr_ty exc;
-                expr_ty cause;
+                expr_ty type;
+                expr_ty inst;
+                expr_ty tback;
 
-                if (PyObject_HasAttrString(obj, "exc")) {
+                if (PyObject_HasAttrString(obj, "type")) {
                         int res;
-                        tmp = PyObject_GetAttrString(obj, "exc");
+                        tmp = PyObject_GetAttrString(obj, "type");
                         if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &exc, arena);
+                        res = obj2ast_expr(tmp, &type, arena);
                         if (res != 0) goto failed;
                         Py_XDECREF(tmp);
                         tmp = NULL;
                 } else {
-                        exc = NULL;
+                        type = NULL;
                 }
-                if (PyObject_HasAttrString(obj, "cause")) {
+                if (PyObject_HasAttrString(obj, "inst")) {
                         int res;
-                        tmp = PyObject_GetAttrString(obj, "cause");
+                        tmp = PyObject_GetAttrString(obj, "inst");
                         if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &cause, arena);
+                        res = obj2ast_expr(tmp, &inst, arena);
                         if (res != 0) goto failed;
                         Py_XDECREF(tmp);
                         tmp = NULL;
                 } else {
-                        cause = NULL;
+                        inst = NULL;
                 }
-                *out = Raise(exc, cause, lineno, col_offset, arena);
+                if (PyObject_HasAttrString(obj, "tback")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "tback");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &tback, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        tback = NULL;
+                }
+                *out = Raise(type, inst, tback, lineno, col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -4556,7 +4359,8 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                         Py_XDECREF(tmp);
                         tmp = NULL;
                 } else {
-                        module = NULL;
+                        PyErr_SetString(PyExc_TypeError, "required field \"module\" missing from ImportFrom");
+                        return 1;
                 }
                 if (PyObject_HasAttrString(obj, "names")) {
                         int res;
@@ -4599,6 +4403,53 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                 if (*out == NULL) goto failed;
                 return 0;
         }
+        isinstance = PyObject_IsInstance(obj, (PyObject*)Exec_type);
+        if (isinstance == -1) {
+                return 1;
+        }
+        if (isinstance) {
+                expr_ty body;
+                expr_ty globals;
+                expr_ty locals;
+
+                if (PyObject_HasAttrString(obj, "body")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "body");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &body, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        PyErr_SetString(PyExc_TypeError, "required field \"body\" missing from Exec");
+                        return 1;
+                }
+                if (PyObject_HasAttrString(obj, "globals")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "globals");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &globals, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        globals = NULL;
+                }
+                if (PyObject_HasAttrString(obj, "locals")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "locals");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &locals, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        locals = NULL;
+                }
+                *out = Exec(body, globals, locals, lineno, col_offset, arena);
+                if (*out == NULL) goto failed;
+                return 0;
+        }
         isinstance = PyObject_IsInstance(obj, (PyObject*)Global_type);
         if (isinstance == -1) {
                 return 1;
@@ -4632,42 +4483,6 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                         return 1;
                 }
                 *out = Global(names, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)Nonlocal_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                asdl_seq* names;
-
-                if (PyObject_HasAttrString(obj, "names")) {
-                        int res;
-                        Py_ssize_t len;
-                        Py_ssize_t i;
-                        tmp = PyObject_GetAttrString(obj, "names");
-                        if (tmp == NULL) goto failed;
-                        if (!PyList_Check(tmp)) {
-                                PyErr_Format(PyExc_TypeError, "Nonlocal field \"names\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                                goto failed;
-                        }
-                        len = PyList_GET_SIZE(tmp);
-                        names = asdl_seq_new(len, arena);
-                        if (names == NULL) goto failed;
-                        for (i = 0; i < len; i++) {
-                                identifier value;
-                                res = obj2ast_identifier(PyList_GET_ITEM(tmp, i), &value, arena);
-                                if (res != 0) goto failed;
-                                asdl_seq_SET(names, i, value);
-                        }
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"names\" missing from Nonlocal");
-                        return 1;
-                }
-                *out = Nonlocal(names, lineno, col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -4725,8 +4540,10 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of stmt, but got %R", obj);
-        failed:
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of stmt, but got %.400s", PyString_AS_STRING(tmp));
+failed:
         Py_XDECREF(tmp);
         return 1;
 }
@@ -4734,9 +4551,9 @@ obj2ast_stmt(PyObject* obj, stmt_ty* out, PyArena* arena)
 int
 obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
-        PyObject *tmp = NULL;
         int lineno;
         int col_offset;
 
@@ -5049,42 +4866,6 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                 if (*out == NULL) goto failed;
                 return 0;
         }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)Set_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                asdl_seq* elts;
-
-                if (PyObject_HasAttrString(obj, "elts")) {
-                        int res;
-                        Py_ssize_t len;
-                        Py_ssize_t i;
-                        tmp = PyObject_GetAttrString(obj, "elts");
-                        if (tmp == NULL) goto failed;
-                        if (!PyList_Check(tmp)) {
-                                PyErr_Format(PyExc_TypeError, "Set field \"elts\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                                goto failed;
-                        }
-                        len = PyList_GET_SIZE(tmp);
-                        elts = asdl_seq_new(len, arena);
-                        if (elts == NULL) goto failed;
-                        for (i = 0; i < len; i++) {
-                                expr_ty value;
-                                res = obj2ast_expr(PyList_GET_ITEM(tmp, i), &value, arena);
-                                if (res != 0) goto failed;
-                                asdl_seq_SET(elts, i, value);
-                        }
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"elts\" missing from Set");
-                        return 1;
-                }
-                *out = Set(elts, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
         isinstance = PyObject_IsInstance(obj, (PyObject*)ListComp_type);
         if (isinstance == -1) {
                 return 1;
@@ -5131,118 +4912,6 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                         return 1;
                 }
                 *out = ListComp(elt, generators, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)SetComp_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                expr_ty elt;
-                asdl_seq* generators;
-
-                if (PyObject_HasAttrString(obj, "elt")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "elt");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &elt, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"elt\" missing from SetComp");
-                        return 1;
-                }
-                if (PyObject_HasAttrString(obj, "generators")) {
-                        int res;
-                        Py_ssize_t len;
-                        Py_ssize_t i;
-                        tmp = PyObject_GetAttrString(obj, "generators");
-                        if (tmp == NULL) goto failed;
-                        if (!PyList_Check(tmp)) {
-                                PyErr_Format(PyExc_TypeError, "SetComp field \"generators\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                                goto failed;
-                        }
-                        len = PyList_GET_SIZE(tmp);
-                        generators = asdl_seq_new(len, arena);
-                        if (generators == NULL) goto failed;
-                        for (i = 0; i < len; i++) {
-                                comprehension_ty value;
-                                res = obj2ast_comprehension(PyList_GET_ITEM(tmp, i), &value, arena);
-                                if (res != 0) goto failed;
-                                asdl_seq_SET(generators, i, value);
-                        }
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"generators\" missing from SetComp");
-                        return 1;
-                }
-                *out = SetComp(elt, generators, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)DictComp_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                expr_ty key;
-                expr_ty value;
-                asdl_seq* generators;
-
-                if (PyObject_HasAttrString(obj, "key")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "key");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &key, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"key\" missing from DictComp");
-                        return 1;
-                }
-                if (PyObject_HasAttrString(obj, "value")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "value");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &value, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"value\" missing from DictComp");
-                        return 1;
-                }
-                if (PyObject_HasAttrString(obj, "generators")) {
-                        int res;
-                        Py_ssize_t len;
-                        Py_ssize_t i;
-                        tmp = PyObject_GetAttrString(obj, "generators");
-                        if (tmp == NULL) goto failed;
-                        if (!PyList_Check(tmp)) {
-                                PyErr_Format(PyExc_TypeError, "DictComp field \"generators\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                                goto failed;
-                        }
-                        len = PyList_GET_SIZE(tmp);
-                        generators = asdl_seq_new(len, arena);
-                        if (generators == NULL) goto failed;
-                        for (i = 0; i < len; i++) {
-                                comprehension_ty value;
-                                res = obj2ast_comprehension(PyList_GET_ITEM(tmp, i), &value, arena);
-                                if (res != 0) goto failed;
-                                asdl_seq_SET(generators, i, value);
-                        }
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"generators\" missing from DictComp");
-                        return 1;
-                }
-                *out = DictComp(key, value, generators, lineno, col_offset,
-                                arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -5493,6 +5162,29 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                 if (*out == NULL) goto failed;
                 return 0;
         }
+        isinstance = PyObject_IsInstance(obj, (PyObject*)Repr_type);
+        if (isinstance == -1) {
+                return 1;
+        }
+        if (isinstance) {
+                expr_ty value;
+
+                if (PyObject_HasAttrString(obj, "value")) {
+                        int res;
+                        tmp = PyObject_GetAttrString(obj, "value");
+                        if (tmp == NULL) goto failed;
+                        res = obj2ast_expr(tmp, &value, arena);
+                        if (res != 0) goto failed;
+                        Py_XDECREF(tmp);
+                        tmp = NULL;
+                } else {
+                        PyErr_SetString(PyExc_TypeError, "required field \"value\" missing from Repr");
+                        return 1;
+                }
+                *out = Repr(value, lineno, col_offset, arena);
+                if (*out == NULL) goto failed;
+                return 0;
+        }
         isinstance = PyObject_IsInstance(obj, (PyObject*)Num_type);
         if (isinstance == -1) {
                 return 1;
@@ -5536,39 +5228,6 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                         return 1;
                 }
                 *out = Str(s, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)Bytes_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                string s;
-
-                if (PyObject_HasAttrString(obj, "s")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "s");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_string(tmp, &s, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"s\" missing from Bytes");
-                        return 1;
-                }
-                *out = Bytes(s, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)Ellipsis_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-
-                *out = Ellipsis(lineno, col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -5667,42 +5326,6 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                         return 1;
                 }
                 *out = Subscript(value, slice, ctx, lineno, col_offset, arena);
-                if (*out == NULL) goto failed;
-                return 0;
-        }
-        isinstance = PyObject_IsInstance(obj, (PyObject*)Starred_type);
-        if (isinstance == -1) {
-                return 1;
-        }
-        if (isinstance) {
-                expr_ty value;
-                expr_context_ty ctx;
-
-                if (PyObject_HasAttrString(obj, "value")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "value");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr(tmp, &value, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"value\" missing from Starred");
-                        return 1;
-                }
-                if (PyObject_HasAttrString(obj, "ctx")) {
-                        int res;
-                        tmp = PyObject_GetAttrString(obj, "ctx");
-                        if (tmp == NULL) goto failed;
-                        res = obj2ast_expr_context(tmp, &ctx, arena);
-                        if (res != 0) goto failed;
-                        Py_XDECREF(tmp);
-                        tmp = NULL;
-                } else {
-                        PyErr_SetString(PyExc_TypeError, "required field \"ctx\" missing from Starred");
-                        return 1;
-                }
-                *out = Starred(value, ctx, lineno, col_offset, arena);
                 if (*out == NULL) goto failed;
                 return 0;
         }
@@ -5841,8 +5464,10 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of expr, but got %R", obj);
-        failed:
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of expr, but got %.400s", PyString_AS_STRING(tmp));
+failed:
         Py_XDECREF(tmp);
         return 1;
 }
@@ -5850,6 +5475,7 @@ obj2ast_expr(PyObject* obj, expr_ty* out, PyArena* arena)
 int
 obj2ast_expr_context(PyObject* obj, expr_context_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
         isinstance = PyObject_IsInstance(obj, (PyObject *)Load_type);
@@ -5901,19 +5527,33 @@ obj2ast_expr_context(PyObject* obj, expr_context_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of expr_context, but got %R", obj);
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of expr_context, but got %.400s", PyString_AS_STRING(tmp));
+failed:
+        Py_XDECREF(tmp);
         return 1;
 }
 
 int
 obj2ast_slice(PyObject* obj, slice_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
-        PyObject *tmp = NULL;
 
         if (obj == Py_None) {
                 *out = NULL;
+                return 0;
+        }
+        isinstance = PyObject_IsInstance(obj, (PyObject*)Ellipsis_type);
+        if (isinstance == -1) {
+                return 1;
+        }
+        if (isinstance) {
+
+                *out = Ellipsis(arena);
+                if (*out == NULL) goto failed;
                 return 0;
         }
         isinstance = PyObject_IsInstance(obj, (PyObject*)Slice_type);
@@ -6022,8 +5662,10 @@ obj2ast_slice(PyObject* obj, slice_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of slice, but got %R", obj);
-        failed:
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of slice, but got %.400s", PyString_AS_STRING(tmp));
+failed:
         Py_XDECREF(tmp);
         return 1;
 }
@@ -6031,6 +5673,7 @@ obj2ast_slice(PyObject* obj, slice_ty* out, PyArena* arena)
 int
 obj2ast_boolop(PyObject* obj, boolop_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
         isinstance = PyObject_IsInstance(obj, (PyObject *)And_type);
@@ -6050,13 +5693,18 @@ obj2ast_boolop(PyObject* obj, boolop_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of boolop, but got %R", obj);
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of boolop, but got %.400s", PyString_AS_STRING(tmp));
+failed:
+        Py_XDECREF(tmp);
         return 1;
 }
 
 int
 obj2ast_operator(PyObject* obj, operator_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
         isinstance = PyObject_IsInstance(obj, (PyObject *)Add_type);
@@ -6156,13 +5804,18 @@ obj2ast_operator(PyObject* obj, operator_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of operator, but got %R", obj);
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of operator, but got %.400s", PyString_AS_STRING(tmp));
+failed:
+        Py_XDECREF(tmp);
         return 1;
 }
 
 int
 obj2ast_unaryop(PyObject* obj, unaryop_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
         isinstance = PyObject_IsInstance(obj, (PyObject *)Invert_type);
@@ -6198,13 +5851,18 @@ obj2ast_unaryop(PyObject* obj, unaryop_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of unaryop, but got %R", obj);
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of unaryop, but got %.400s", PyString_AS_STRING(tmp));
+failed:
+        Py_XDECREF(tmp);
         return 1;
 }
 
 int
 obj2ast_cmpop(PyObject* obj, cmpop_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
         isinstance = PyObject_IsInstance(obj, (PyObject *)Eq_type);
@@ -6288,7 +5946,11 @@ obj2ast_cmpop(PyObject* obj, cmpop_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of cmpop, but got %R", obj);
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of cmpop, but got %.400s", PyString_AS_STRING(tmp));
+failed:
+        Py_XDECREF(tmp);
         return 1;
 }
 
@@ -6359,9 +6021,9 @@ failed:
 int
 obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena* arena)
 {
+        PyObject* tmp = NULL;
         int isinstance;
 
-        PyObject *tmp = NULL;
         int lineno;
         int col_offset;
 
@@ -6399,7 +6061,7 @@ obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena* arena)
         }
         if (isinstance) {
                 expr_ty type;
-                identifier name;
+                expr_ty name;
                 asdl_seq* body;
 
                 if (PyObject_HasAttrString(obj, "type")) {
@@ -6417,7 +6079,7 @@ obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena* arena)
                         int res;
                         tmp = PyObject_GetAttrString(obj, "name");
                         if (tmp == NULL) goto failed;
-                        res = obj2ast_identifier(tmp, &name, arena);
+                        res = obj2ast_expr(tmp, &name, arena);
                         if (res != 0) goto failed;
                         Py_XDECREF(tmp);
                         tmp = NULL;
@@ -6455,8 +6117,10 @@ obj2ast_excepthandler(PyObject* obj, excepthandler_ty* out, PyArena* arena)
                 return 0;
         }
 
-        PyErr_Format(PyExc_TypeError, "expected some sort of excepthandler, but got %R", obj);
-        failed:
+        tmp = PyObject_Repr(obj);
+        if (tmp == NULL) goto failed;
+        PyErr_Format(PyExc_TypeError, "expected some sort of excepthandler, but got %.400s", PyString_AS_STRING(tmp));
+failed:
         Py_XDECREF(tmp);
         return 1;
 }
@@ -6467,12 +6131,8 @@ obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena)
         PyObject* tmp = NULL;
         asdl_seq* args;
         identifier vararg;
-        expr_ty varargannotation;
-        asdl_seq* kwonlyargs;
         identifier kwarg;
-        expr_ty kwargannotation;
         asdl_seq* defaults;
-        asdl_seq* kw_defaults;
 
         if (PyObject_HasAttrString(obj, "args")) {
                 int res;
@@ -6488,8 +6148,8 @@ obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena)
                 args = asdl_seq_new(len, arena);
                 if (args == NULL) goto failed;
                 for (i = 0; i < len; i++) {
-                        arg_ty value;
-                        res = obj2ast_arg(PyList_GET_ITEM(tmp, i), &value, arena);
+                        expr_ty value;
+                        res = obj2ast_expr(PyList_GET_ITEM(tmp, i), &value, arena);
                         if (res != 0) goto failed;
                         asdl_seq_SET(args, i, value);
                 }
@@ -6510,42 +6170,6 @@ obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena)
         } else {
                 vararg = NULL;
         }
-        if (PyObject_HasAttrString(obj, "varargannotation")) {
-                int res;
-                tmp = PyObject_GetAttrString(obj, "varargannotation");
-                if (tmp == NULL) goto failed;
-                res = obj2ast_expr(tmp, &varargannotation, arena);
-                if (res != 0) goto failed;
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                varargannotation = NULL;
-        }
-        if (PyObject_HasAttrString(obj, "kwonlyargs")) {
-                int res;
-                Py_ssize_t len;
-                Py_ssize_t i;
-                tmp = PyObject_GetAttrString(obj, "kwonlyargs");
-                if (tmp == NULL) goto failed;
-                if (!PyList_Check(tmp)) {
-                        PyErr_Format(PyExc_TypeError, "arguments field \"kwonlyargs\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                        goto failed;
-                }
-                len = PyList_GET_SIZE(tmp);
-                kwonlyargs = asdl_seq_new(len, arena);
-                if (kwonlyargs == NULL) goto failed;
-                for (i = 0; i < len; i++) {
-                        arg_ty value;
-                        res = obj2ast_arg(PyList_GET_ITEM(tmp, i), &value, arena);
-                        if (res != 0) goto failed;
-                        asdl_seq_SET(kwonlyargs, i, value);
-                }
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                PyErr_SetString(PyExc_TypeError, "required field \"kwonlyargs\" missing from arguments");
-                return 1;
-        }
         if (PyObject_HasAttrString(obj, "kwarg")) {
                 int res;
                 tmp = PyObject_GetAttrString(obj, "kwarg");
@@ -6556,17 +6180,6 @@ obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena)
                 tmp = NULL;
         } else {
                 kwarg = NULL;
-        }
-        if (PyObject_HasAttrString(obj, "kwargannotation")) {
-                int res;
-                tmp = PyObject_GetAttrString(obj, "kwargannotation");
-                if (tmp == NULL) goto failed;
-                res = obj2ast_expr(tmp, &kwargannotation, arena);
-                if (res != 0) goto failed;
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                kwargannotation = NULL;
         }
         if (PyObject_HasAttrString(obj, "defaults")) {
                 int res;
@@ -6593,70 +6206,7 @@ obj2ast_arguments(PyObject* obj, arguments_ty* out, PyArena* arena)
                 PyErr_SetString(PyExc_TypeError, "required field \"defaults\" missing from arguments");
                 return 1;
         }
-        if (PyObject_HasAttrString(obj, "kw_defaults")) {
-                int res;
-                Py_ssize_t len;
-                Py_ssize_t i;
-                tmp = PyObject_GetAttrString(obj, "kw_defaults");
-                if (tmp == NULL) goto failed;
-                if (!PyList_Check(tmp)) {
-                        PyErr_Format(PyExc_TypeError, "arguments field \"kw_defaults\" must be a list, not a %.200s", tmp->ob_type->tp_name);
-                        goto failed;
-                }
-                len = PyList_GET_SIZE(tmp);
-                kw_defaults = asdl_seq_new(len, arena);
-                if (kw_defaults == NULL) goto failed;
-                for (i = 0; i < len; i++) {
-                        expr_ty value;
-                        res = obj2ast_expr(PyList_GET_ITEM(tmp, i), &value, arena);
-                        if (res != 0) goto failed;
-                        asdl_seq_SET(kw_defaults, i, value);
-                }
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                PyErr_SetString(PyExc_TypeError, "required field \"kw_defaults\" missing from arguments");
-                return 1;
-        }
-        *out = arguments(args, vararg, varargannotation, kwonlyargs, kwarg,
-                         kwargannotation, defaults, kw_defaults, arena);
-        return 0;
-failed:
-        Py_XDECREF(tmp);
-        return 1;
-}
-
-int
-obj2ast_arg(PyObject* obj, arg_ty* out, PyArena* arena)
-{
-        PyObject* tmp = NULL;
-        identifier arg;
-        expr_ty annotation;
-
-        if (PyObject_HasAttrString(obj, "arg")) {
-                int res;
-                tmp = PyObject_GetAttrString(obj, "arg");
-                if (tmp == NULL) goto failed;
-                res = obj2ast_identifier(tmp, &arg, arena);
-                if (res != 0) goto failed;
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                PyErr_SetString(PyExc_TypeError, "required field \"arg\" missing from arg");
-                return 1;
-        }
-        if (PyObject_HasAttrString(obj, "annotation")) {
-                int res;
-                tmp = PyObject_GetAttrString(obj, "annotation");
-                if (tmp == NULL) goto failed;
-                res = obj2ast_expr(tmp, &annotation, arena);
-                if (res != 0) goto failed;
-                Py_XDECREF(tmp);
-                tmp = NULL;
-        } else {
-                annotation = NULL;
-        }
-        *out = arg(arg, annotation, arena);
+        *out = arguments(args, vararg, kwarg, defaults, arena);
         return 0;
 failed:
         Py_XDECREF(tmp);
@@ -6739,223 +6289,161 @@ failed:
 }
 
 
-static struct PyModuleDef _astmodule = {
-  PyModuleDef_HEAD_INIT, "_ast"
-};
 PyMODINIT_FUNC
-PyInit__ast(void)
+init_ast(void)
 {
         PyObject *m, *d;
-        if (!init_types()) return NULL;
-        m = PyModule_Create(&_astmodule);
-        if (!m) return NULL;
+        if (!init_types()) return;
+        m = Py_InitModule3("_ast", NULL, NULL);
+        if (!m) return;
         d = PyModule_GetDict(m);
-        if (PyDict_SetItemString(d, "AST", (PyObject*)&AST_type) < 0) return
-            NULL;
+        if (PyDict_SetItemString(d, "AST", (PyObject*)&AST_type) < 0) return;
         if (PyModule_AddIntConstant(m, "PyCF_ONLY_AST", PyCF_ONLY_AST) < 0)
-                return NULL;
-        if (PyModule_AddStringConstant(m, "__version__", "82163") < 0)
-                return NULL;
-        if (PyDict_SetItemString(d, "mod", (PyObject*)mod_type) < 0) return
-            NULL;
+                return;
+        if (PyModule_AddStringConstant(m, "__version__", "62047") < 0)
+                return;
+        if (PyDict_SetItemString(d, "mod", (PyObject*)mod_type) < 0) return;
         if (PyDict_SetItemString(d, "Module", (PyObject*)Module_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Interactive", (PyObject*)Interactive_type)
-            < 0) return NULL;
+            < 0) return;
         if (PyDict_SetItemString(d, "Expression", (PyObject*)Expression_type) <
-            0) return NULL;
-        if (PyDict_SetItemString(d, "Suite", (PyObject*)Suite_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "stmt", (PyObject*)stmt_type) < 0) return
-            NULL;
+            0) return;
+        if (PyDict_SetItemString(d, "Suite", (PyObject*)Suite_type) < 0) return;
+        if (PyDict_SetItemString(d, "stmt", (PyObject*)stmt_type) < 0) return;
         if (PyDict_SetItemString(d, "FunctionDef", (PyObject*)FunctionDef_type)
-            < 0) return NULL;
+            < 0) return;
         if (PyDict_SetItemString(d, "ClassDef", (PyObject*)ClassDef_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Return", (PyObject*)Return_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Delete", (PyObject*)Delete_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Assign", (PyObject*)Assign_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "AugAssign", (PyObject*)AugAssign_type) <
-            0) return NULL;
-        if (PyDict_SetItemString(d, "For", (PyObject*)For_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "While", (PyObject*)While_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "If", (PyObject*)If_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "With", (PyObject*)With_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Raise", (PyObject*)Raise_type) < 0) return
-            NULL;
+            0) return;
+        if (PyDict_SetItemString(d, "Print", (PyObject*)Print_type) < 0) return;
+        if (PyDict_SetItemString(d, "For", (PyObject*)For_type) < 0) return;
+        if (PyDict_SetItemString(d, "While", (PyObject*)While_type) < 0) return;
+        if (PyDict_SetItemString(d, "If", (PyObject*)If_type) < 0) return;
+        if (PyDict_SetItemString(d, "With", (PyObject*)With_type) < 0) return;
+        if (PyDict_SetItemString(d, "Raise", (PyObject*)Raise_type) < 0) return;
         if (PyDict_SetItemString(d, "TryExcept", (PyObject*)TryExcept_type) <
-            0) return NULL;
+            0) return;
         if (PyDict_SetItemString(d, "TryFinally", (PyObject*)TryFinally_type) <
-            0) return NULL;
+            0) return;
         if (PyDict_SetItemString(d, "Assert", (PyObject*)Assert_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Import", (PyObject*)Import_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "ImportFrom", (PyObject*)ImportFrom_type) <
-            0) return NULL;
+            0) return;
+        if (PyDict_SetItemString(d, "Exec", (PyObject*)Exec_type) < 0) return;
         if (PyDict_SetItemString(d, "Global", (PyObject*)Global_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Nonlocal", (PyObject*)Nonlocal_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Expr", (PyObject*)Expr_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Pass", (PyObject*)Pass_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Break", (PyObject*)Break_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "Expr", (PyObject*)Expr_type) < 0) return;
+        if (PyDict_SetItemString(d, "Pass", (PyObject*)Pass_type) < 0) return;
+        if (PyDict_SetItemString(d, "Break", (PyObject*)Break_type) < 0) return;
         if (PyDict_SetItemString(d, "Continue", (PyObject*)Continue_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "expr", (PyObject*)expr_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "expr", (PyObject*)expr_type) < 0) return;
         if (PyDict_SetItemString(d, "BoolOp", (PyObject*)BoolOp_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "BinOp", (PyObject*)BinOp_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "BinOp", (PyObject*)BinOp_type) < 0) return;
         if (PyDict_SetItemString(d, "UnaryOp", (PyObject*)UnaryOp_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Lambda", (PyObject*)Lambda_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "IfExp", (PyObject*)IfExp_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Dict", (PyObject*)Dict_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Set", (PyObject*)Set_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "IfExp", (PyObject*)IfExp_type) < 0) return;
+        if (PyDict_SetItemString(d, "Dict", (PyObject*)Dict_type) < 0) return;
         if (PyDict_SetItemString(d, "ListComp", (PyObject*)ListComp_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "SetComp", (PyObject*)SetComp_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "DictComp", (PyObject*)DictComp_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "GeneratorExp",
-            (PyObject*)GeneratorExp_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "Yield", (PyObject*)Yield_type) < 0) return
-            NULL;
+            (PyObject*)GeneratorExp_type) < 0) return;
+        if (PyDict_SetItemString(d, "Yield", (PyObject*)Yield_type) < 0) return;
         if (PyDict_SetItemString(d, "Compare", (PyObject*)Compare_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Call", (PyObject*)Call_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Num", (PyObject*)Num_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Str", (PyObject*)Str_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Bytes", (PyObject*)Bytes_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Ellipsis", (PyObject*)Ellipsis_type) < 0)
-            return NULL;
+            return;
+        if (PyDict_SetItemString(d, "Call", (PyObject*)Call_type) < 0) return;
+        if (PyDict_SetItemString(d, "Repr", (PyObject*)Repr_type) < 0) return;
+        if (PyDict_SetItemString(d, "Num", (PyObject*)Num_type) < 0) return;
+        if (PyDict_SetItemString(d, "Str", (PyObject*)Str_type) < 0) return;
         if (PyDict_SetItemString(d, "Attribute", (PyObject*)Attribute_type) <
-            0) return NULL;
+            0) return;
         if (PyDict_SetItemString(d, "Subscript", (PyObject*)Subscript_type) <
-            0) return NULL;
-        if (PyDict_SetItemString(d, "Starred", (PyObject*)Starred_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Name", (PyObject*)Name_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "List", (PyObject*)List_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Tuple", (PyObject*)Tuple_type) < 0) return
-            NULL;
+            0) return;
+        if (PyDict_SetItemString(d, "Name", (PyObject*)Name_type) < 0) return;
+        if (PyDict_SetItemString(d, "List", (PyObject*)List_type) < 0) return;
+        if (PyDict_SetItemString(d, "Tuple", (PyObject*)Tuple_type) < 0) return;
         if (PyDict_SetItemString(d, "expr_context",
-            (PyObject*)expr_context_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "Load", (PyObject*)Load_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Store", (PyObject*)Store_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Del", (PyObject*)Del_type) < 0) return
-            NULL;
+            (PyObject*)expr_context_type) < 0) return;
+        if (PyDict_SetItemString(d, "Load", (PyObject*)Load_type) < 0) return;
+        if (PyDict_SetItemString(d, "Store", (PyObject*)Store_type) < 0) return;
+        if (PyDict_SetItemString(d, "Del", (PyObject*)Del_type) < 0) return;
         if (PyDict_SetItemString(d, "AugLoad", (PyObject*)AugLoad_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "AugStore", (PyObject*)AugStore_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Param", (PyObject*)Param_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "slice", (PyObject*)slice_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Slice", (PyObject*)Slice_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "Param", (PyObject*)Param_type) < 0) return;
+        if (PyDict_SetItemString(d, "slice", (PyObject*)slice_type) < 0) return;
+        if (PyDict_SetItemString(d, "Ellipsis", (PyObject*)Ellipsis_type) < 0)
+            return;
+        if (PyDict_SetItemString(d, "Slice", (PyObject*)Slice_type) < 0) return;
         if (PyDict_SetItemString(d, "ExtSlice", (PyObject*)ExtSlice_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Index", (PyObject*)Index_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "Index", (PyObject*)Index_type) < 0) return;
         if (PyDict_SetItemString(d, "boolop", (PyObject*)boolop_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "And", (PyObject*)And_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Or", (PyObject*)Or_type) < 0) return NULL;
+            return;
+        if (PyDict_SetItemString(d, "And", (PyObject*)And_type) < 0) return;
+        if (PyDict_SetItemString(d, "Or", (PyObject*)Or_type) < 0) return;
         if (PyDict_SetItemString(d, "operator", (PyObject*)operator_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Add", (PyObject*)Add_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Sub", (PyObject*)Sub_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Mult", (PyObject*)Mult_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Div", (PyObject*)Div_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Mod", (PyObject*)Mod_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Pow", (PyObject*)Pow_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "Add", (PyObject*)Add_type) < 0) return;
+        if (PyDict_SetItemString(d, "Sub", (PyObject*)Sub_type) < 0) return;
+        if (PyDict_SetItemString(d, "Mult", (PyObject*)Mult_type) < 0) return;
+        if (PyDict_SetItemString(d, "Div", (PyObject*)Div_type) < 0) return;
+        if (PyDict_SetItemString(d, "Mod", (PyObject*)Mod_type) < 0) return;
+        if (PyDict_SetItemString(d, "Pow", (PyObject*)Pow_type) < 0) return;
         if (PyDict_SetItemString(d, "LShift", (PyObject*)LShift_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "RShift", (PyObject*)RShift_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "BitOr", (PyObject*)BitOr_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "BitOr", (PyObject*)BitOr_type) < 0) return;
         if (PyDict_SetItemString(d, "BitXor", (PyObject*)BitXor_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "BitAnd", (PyObject*)BitAnd_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "FloorDiv", (PyObject*)FloorDiv_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "unaryop", (PyObject*)unaryop_type) < 0)
-            return NULL;
+            return;
         if (PyDict_SetItemString(d, "Invert", (PyObject*)Invert_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "Not", (PyObject*)Not_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "UAdd", (PyObject*)UAdd_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "USub", (PyObject*)USub_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "cmpop", (PyObject*)cmpop_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Eq", (PyObject*)Eq_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "NotEq", (PyObject*)NotEq_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Lt", (PyObject*)Lt_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "LtE", (PyObject*)LtE_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Gt", (PyObject*)Gt_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "GtE", (PyObject*)GtE_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "Is", (PyObject*)Is_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "IsNot", (PyObject*)IsNot_type) < 0) return
-            NULL;
-        if (PyDict_SetItemString(d, "In", (PyObject*)In_type) < 0) return NULL;
-        if (PyDict_SetItemString(d, "NotIn", (PyObject*)NotIn_type) < 0) return
-            NULL;
+            return;
+        if (PyDict_SetItemString(d, "Not", (PyObject*)Not_type) < 0) return;
+        if (PyDict_SetItemString(d, "UAdd", (PyObject*)UAdd_type) < 0) return;
+        if (PyDict_SetItemString(d, "USub", (PyObject*)USub_type) < 0) return;
+        if (PyDict_SetItemString(d, "cmpop", (PyObject*)cmpop_type) < 0) return;
+        if (PyDict_SetItemString(d, "Eq", (PyObject*)Eq_type) < 0) return;
+        if (PyDict_SetItemString(d, "NotEq", (PyObject*)NotEq_type) < 0) return;
+        if (PyDict_SetItemString(d, "Lt", (PyObject*)Lt_type) < 0) return;
+        if (PyDict_SetItemString(d, "LtE", (PyObject*)LtE_type) < 0) return;
+        if (PyDict_SetItemString(d, "Gt", (PyObject*)Gt_type) < 0) return;
+        if (PyDict_SetItemString(d, "GtE", (PyObject*)GtE_type) < 0) return;
+        if (PyDict_SetItemString(d, "Is", (PyObject*)Is_type) < 0) return;
+        if (PyDict_SetItemString(d, "IsNot", (PyObject*)IsNot_type) < 0) return;
+        if (PyDict_SetItemString(d, "In", (PyObject*)In_type) < 0) return;
+        if (PyDict_SetItemString(d, "NotIn", (PyObject*)NotIn_type) < 0) return;
         if (PyDict_SetItemString(d, "comprehension",
-            (PyObject*)comprehension_type) < 0) return NULL;
+            (PyObject*)comprehension_type) < 0) return;
         if (PyDict_SetItemString(d, "excepthandler",
-            (PyObject*)excepthandler_type) < 0) return NULL;
+            (PyObject*)excepthandler_type) < 0) return;
         if (PyDict_SetItemString(d, "ExceptHandler",
-            (PyObject*)ExceptHandler_type) < 0) return NULL;
+            (PyObject*)ExceptHandler_type) < 0) return;
         if (PyDict_SetItemString(d, "arguments", (PyObject*)arguments_type) <
-            0) return NULL;
-        if (PyDict_SetItemString(d, "arg", (PyObject*)arg_type) < 0) return
-            NULL;
+            0) return;
         if (PyDict_SetItemString(d, "keyword", (PyObject*)keyword_type) < 0)
-            return NULL;
-        if (PyDict_SetItemString(d, "alias", (PyObject*)alias_type) < 0) return
-            NULL;
-        return m;
+            return;
+        if (PyDict_SetItemString(d, "alias", (PyObject*)alias_type) < 0) return;
 }
 
 

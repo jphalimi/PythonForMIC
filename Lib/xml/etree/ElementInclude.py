@@ -1,6 +1,6 @@
 #
 # ElementTree
-# $Id: ElementInclude.py 3375 2008-02-13 08:05:08Z fredrik $
+# $Id: ElementInclude.py 1862 2004-06-18 07:31:02Z Fredrik $
 #
 # limited xinclude support for element trees
 #
@@ -16,7 +16,7 @@
 # --------------------------------------------------------------------
 # The ElementTree toolkit is
 #
-# Copyright (c) 1999-2008 by Fredrik Lundh
+# Copyright (c) 1999-2004 by Fredrik Lundh
 #
 # By obtaining, using, and/or copying this software and/or its
 # associated documentation, you agree that you have read, understood,
@@ -42,14 +42,14 @@
 # --------------------------------------------------------------------
 
 # Licensed to PSF under a Contributor Agreement.
-# See http://www.python.org/psf/license for licensing details.
+# See http://www.python.org/2.4/license for licensing details.
 
 ##
 # Limited XInclude support for the ElementTree package.
 ##
 
 import copy
-from . import ElementTree
+import ElementTree
 
 XINCLUDE = "{http://www.w3.org/2001/XInclude}"
 
@@ -67,7 +67,7 @@ class FatalIncludeError(SyntaxError):
 #
 # @param href Resource reference.
 # @param parse Parse mode.  Either "xml" or "text".
-# @param encoding Optional text encoding (UTF-8 by default for "text").
+# @param encoding Optional text encoding.
 # @return The expanded resource.  If the parse mode is "xml", this
 #    is an ElementTree instance.  If the parse mode is "text", this
 #    is a Unicode string.  If the loader fails, it can return None
@@ -75,14 +75,13 @@ class FatalIncludeError(SyntaxError):
 # @throws IOError If the loader fails to load the resource.
 
 def default_loader(href, parse, encoding=None):
+    file = open(href)
     if parse == "xml":
-        file = open(href, 'rb')
         data = ElementTree.parse(file).getroot()
     else:
-        if not encoding:
-            encoding = 'UTF-8'
-        file = open(href, 'r', encoding=encoding)
         data = file.read()
+        if encoding:
+            data = data.decode(encoding)
     file.close()
     return data
 
@@ -126,7 +125,7 @@ def include(elem, loader=None):
                         )
                 if i:
                     node = elem[i-1]
-                    node.tail = (node.tail or "") + text + (e.tail or "")
+                    node.tail = (node.tail or "") + text
                 else:
                     elem.text = (elem.text or "") + text + (e.tail or "")
                 del elem[i]

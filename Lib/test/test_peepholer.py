@@ -1,7 +1,6 @@
 import dis
-import re
 import sys
-from io import StringIO
+from cStringIO import StringIO
 import unittest
 
 def disassemble(func):
@@ -20,15 +19,15 @@ def dis_single(line):
 class TestTranforms(unittest.TestCase):
 
     def test_unot(self):
-        # UNARY_NOT POP_JUMP_IF_FALSE  -->  POP_JUMP_IF_TRUE'
+        # UNARY_NOT JUMP_IF_FALSE POP_TOP  -->  JUMP_IF_TRUE POP_TOP'
         def unot(x):
             if not x == 2:
                 del x
         asm = disassemble(unot)
-        for elem in ('UNARY_NOT', 'POP_JUMP_IF_FALSE'):
-            self.assertNotIn(elem, asm)
-        for elem in ('POP_JUMP_IF_TRUE',):
-            self.assertIn(elem, asm)
+        for elem in ('UNARY_NOT', 'JUMP_IF_FALSE'):
+            self.assert_(elem not in asm)
+        for elem in ('JUMP_IF_TRUE', 'POP_TOP'):
+            self.assert_(elem in asm)
 
     def test_elim_inversion_of_is_or_in(self):
         for line, elem in (
@@ -38,43 +37,35 @@ class TestTranforms(unittest.TestCase):
             ('not a not in b', '(in)',),
             ):
             asm = dis_single(line)
-            self.assertIn(elem, asm)
+            self.assert_(elem in asm)
 
-    def test_global_as_constant(self):
-        # LOAD_GLOBAL None/True/False  -->  LOAD_CONST None/True/False
+    def test_none_as_constant(self):
+        # LOAD_GLOBAL None  -->  LOAD_CONST None
         def f(x):
             None
-            None
             return x
-        def g(x):
-            True
-            return x
-        def h(x):
-            False
-            return x
-        for func, name in ((f, 'None'), (g, 'True'), (h, 'False')):
-            asm = disassemble(func)
-            for elem in ('LOAD_GLOBAL',):
-                self.assertNotIn(elem, asm)
-            for elem in ('LOAD_CONST', '('+name+')'):
-                self.assertIn(elem, asm)
+        asm = disassemble(f)
+        for elem in ('LOAD_GLOBAL',):
+            self.assert_(elem not in asm)
+        for elem in ('LOAD_CONST', '(None)'):
+            self.assert_(elem in asm)
         def f():
             'Adding a docstring made this test fail in Py2.5.0'
             return None
-        self.assertIn('LOAD_CONST', disassemble(f))
-        self.assertNotIn('LOAD_GLOBAL', disassemble(f))
+        self.assert_('LOAD_CONST' in disassemble(f))
+        self.assert_('LOAD_GLOBAL' not in disassemble(f))
 
     def test_while_one(self):
-        # Skip over:  LOAD_CONST trueconst  POP_JUMP_IF_FALSE xx
+        # Skip over:  LOAD_CONST trueconst  JUMP_IF_FALSE xx  POP_TOP
         def f():
             while 1:
                 pass
             return list
         asm = disassemble(f)
-        for elem in ('LOAD_CONST', 'POP_JUMP_IF_FALSE'):
-            self.assertNotIn(elem, asm)
+        for elem in ('LOAD_CONST', 'JUMP_IF_FALSE'):
+            self.assert_(elem not in asm)
         for elem in ('JUMP_ABSOLUTE',):
-            self.assertIn(elem, asm)
+            self.assert_(elem in asm)
 
     def test_pack_unpack(self):
         for line, elem in (
@@ -83,9 +74,9 @@ class TestTranforms(unittest.TestCase):
             ('a, b, c = a, b, c', 'ROT_THREE',),
             ):
             asm = dis_single(line)
-            self.assertIn(elem, asm)
-            self.assertNotIn('BUILD_TUPLE', asm)
-            self.assertNotIn('UNPACK_TUPLE', asm)
+            self.assert_(elem in asm)
+            self.assert_('BUILD_TUPLE' not in asm)
+            self.assert_('UNPACK_TUPLE' not in asm)
 
     def test_folding_of_tuples_of_constants(self):
         for line, elem in (
@@ -96,8 +87,8 @@ class TestTranforms(unittest.TestCase):
             ('((1, 2), 3, 4)', '(((1, 2), 3, 4))'),
             ):
             asm = dis_single(line)
-            self.assertIn(elem, asm)
-            self.assertNotIn('BUILD_TUPLE', asm)
+            self.assert_(elem in asm)
+            self.assert_('BUILD_TUPLE' not in asm)
 
         # Bug 1053819:  Tuple of constants misidentified when presented with:
         # . . . opcode_with_arg 100   unary_opcode   BUILD_TUPLE 1  . . .
@@ -115,54 +106,6 @@ class TestTranforms(unittest.TestCase):
                 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
                 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
             ],)
-
-    def test_folding_of_lists_of_constants(self):
-        for line, elem in (
-            # in/not in constants with BUILD_LIST should be folded to a tuple:
-            ('a in [1,2,3]', '(1, 2, 3)'),
-            ('a not in ["a","b","c"]', "(('a', 'b', 'c'))"),
-            ('a in [None, 1, None]', '((None, 1, None))'),
-            ('a not in [(1, 2), 3, 4]', '(((1, 2), 3, 4))'),
-            ):
-            asm = dis_single(line)
-            self.assertIn(elem, asm)
-            self.assertNotIn('BUILD_LIST', asm)
-
-    def test_folding_of_sets_of_constants(self):
-        for line, elem in (
-            # in/not in constants with BUILD_SET should be folded to a frozenset:
-            ('a in {1,2,3}', frozenset({1, 2, 3})),
-            ('a not in {"a","b","c"}', frozenset({'a', 'c', 'b'})),
-            ('a in {None, 1, None}', frozenset({1, None})),
-            ('a not in {(1, 2), 3, 4}', frozenset({(1, 2), 3, 4})),
-            ('a in {1, 2, 3, 3, 2, 1}', frozenset({1, 2, 3})),
-            ):
-            asm = dis_single(line)
-            self.assertNotIn('BUILD_SET', asm)
-
-            # Verify that the frozenset 'elem' is in the disassembly
-            # The ordering of the elements in repr( frozenset ) isn't
-            # guaranteed, so we jump through some hoops to ensure that we have
-            # the frozenset we expect:
-            self.assertIn('frozenset', asm)
-            # Extract the frozenset literal from the disassembly:
-            m = re.match(r'.*(frozenset\({.*}\)).*', asm, re.DOTALL)
-            self.assertTrue(m)
-            self.assertEqual(eval(m.group(1)), elem)
-
-        # Ensure that the resulting code actually works:
-        def f(a):
-            return a in {1, 2, 3}
-
-        def g(a):
-            return a not in {1, 2, 3}
-
-        self.assertTrue(f(3))
-        self.assertTrue(not f(4))
-
-        self.assertTrue(not g(3))
-        self.assertTrue(g(4))
-
 
     def test_folding_of_binops_on_constants(self):
         for line, elem in (
@@ -183,45 +126,27 @@ class TestTranforms(unittest.TestCase):
             ('a = 13 | 7', '(15)'),                 # binary or
             ):
             asm = dis_single(line)
-            self.assertIn(elem, asm, asm)
-            self.assertNotIn('BINARY_', asm)
+            self.assert_(elem in asm, asm)
+            self.assert_('BINARY_' not in asm)
 
         # Verify that unfoldables are skipped
         asm = dis_single('a=2+"b"')
-        self.assertIn('(2)', asm)
-        self.assertIn("('b')", asm)
+        self.assert_('(2)' in asm)
+        self.assert_("('b')" in asm)
 
         # Verify that large sequences do not result from folding
         asm = dis_single('a="x"*1000')
-        self.assertIn('(1000)', asm)
-
-    def test_binary_subscr_on_unicode(self):
-        # valid code get optimized
-        asm = dis_single('"foo"[0]')
-        self.assertIn("('f')", asm)
-        self.assertNotIn('BINARY_SUBSCR', asm)
-        asm = dis_single('"\u0061\uffff"[1]')
-        self.assertIn("('\\uffff')", asm)
-        self.assertNotIn('BINARY_SUBSCR', asm)
-
-        # invalid code doesn't get optimized
-        # out of range
-        asm = dis_single('"fuu"[10]')
-        self.assertIn('BINARY_SUBSCR', asm)
-        # non-BMP char (see #5057)
-        asm = dis_single('"\U00012345"[0]')
-        self.assertIn('BINARY_SUBSCR', asm)
-
+        self.assert_('(1000)' in asm)
 
     def test_folding_of_unaryops_on_constants(self):
         for line, elem in (
+            ('`1`', "('1')"),                       # unary convert
             ('-0.5', '(-0.5)'),                     # unary negative
             ('~-2', '(1)'),                         # unary invert
-            ('+1', '(1)'),                          # unary positive
         ):
             asm = dis_single(line)
-            self.assertIn(elem, asm, asm)
-            self.assertNotIn('UNARY_', asm)
+            self.assert_(elem in asm, asm)
+            self.assert_('UNARY_' not in asm)
 
         # Verify that unfoldables are skipped
         for line, elem in (
@@ -229,16 +154,16 @@ class TestTranforms(unittest.TestCase):
             ('~"abc"', "('abc')"),                  # unary invert
         ):
             asm = dis_single(line)
-            self.assertIn(elem, asm, asm)
-            self.assertIn('UNARY_', asm)
+            self.assert_(elem in asm, asm)
+            self.assert_('UNARY_' in asm)
 
     def test_elim_extra_return(self):
         # RETURN LOAD_CONST None RETURN  -->  RETURN
         def f(x):
             return x
         asm = disassemble(f)
-        self.assertNotIn('LOAD_CONST', asm)
-        self.assertNotIn('(None)', asm)
+        self.assert_('LOAD_CONST' not in asm)
+        self.assert_('(None)' not in asm)
         self.assertEqual(asm.split().count('RETURN_VALUE'), 1)
 
     def test_elim_jump_to_return(self):
@@ -246,8 +171,8 @@ class TestTranforms(unittest.TestCase):
         def f(cond, true_value, false_value):
             return true_value if cond else false_value
         asm = disassemble(f)
-        self.assertNotIn('JUMP_FORWARD', asm)
-        self.assertNotIn('JUMP_ABSOLUTE', asm)
+        self.assert_('JUMP_FORWARD' not in asm)
+        self.assert_('JUMP_ABSOLUTE' not in asm)
         self.assertEqual(asm.split().count('RETURN_VALUE'), 2)
 
     def test_elim_jump_after_return1(self):
@@ -262,8 +187,8 @@ class TestTranforms(unittest.TestCase):
                 return 5
             return 6
         asm = disassemble(f)
-        self.assertNotIn('JUMP_FORWARD', asm)
-        self.assertNotIn('JUMP_ABSOLUTE', asm)
+        self.assert_('JUMP_FORWARD' not in asm)
+        self.assert_('JUMP_ABSOLUTE' not in asm)
         self.assertEqual(asm.split().count('RETURN_VALUE'), 6)
 
     def test_elim_jump_after_return2(self):
@@ -272,47 +197,30 @@ class TestTranforms(unittest.TestCase):
             while 1:
                 if cond1: return 4
         asm = disassemble(f)
-        self.assertNotIn('JUMP_FORWARD', asm)
+        self.assert_('JUMP_FORWARD' not in asm)
         # There should be one jump for the while loop.
         self.assertEqual(asm.split().count('JUMP_ABSOLUTE'), 1)
         self.assertEqual(asm.split().count('RETURN_VALUE'), 2)
 
-    def test_make_function_doesnt_bail(self):
-        def f():
-            def g()->1+1:
-                pass
-            return g
-        asm = disassemble(f)
-        self.assertNotIn('BINARY_ADD', asm)
-
-class TestBuglets(unittest.TestCase):
-
-    def test_bug_11510(self):
-        # folded constant set optimization was commingled with the tuple
-        # unpacking optimization which would fail if the set had duplicate
-        # elements so that the set length was unexpected
-        def f():
-            x, y = {1, 1}
-            return x, y
-        with self.assertRaises(ValueError):
-            f()
-
 
 def test_main(verbose=None):
     import sys
-    from test import support
-    test_classes = (TestTranforms, TestBuglets)
-    support.run_unittest(*test_classes)
+    from test import test_support
+    test_classes = (TestTranforms,)
 
-    # verify reference counting
-    if verbose and hasattr(sys, "gettotalrefcount"):
-        import gc
-        counts = [None] * 5
-        for i in range(len(counts)):
-            support.run_unittest(*test_classes)
-            gc.collect()
-            counts[i] = sys.gettotalrefcount()
-        print(counts)
+    with test_support._check_py3k_warnings(
+            ("backquote not supported", SyntaxWarning)):
+        test_support.run_unittest(*test_classes)
+
+        # verify reference counting
+        if verbose and hasattr(sys, "gettotalrefcount"):
+            import gc
+            counts = [None] * 5
+            for i in xrange(len(counts)):
+                test_support.run_unittest(*test_classes)
+                gc.collect()
+                counts[i] = sys.gettotalrefcount()
+            print counts
 
 if __name__ == "__main__":
     test_main(verbose=True)

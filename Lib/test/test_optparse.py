@@ -1,24 +1,27 @@
+#!/usr/bin/python
+
 #
 # Test suite for Optik.  Supplied by Johannes Gijsbers
 # (taradino@softhome.net) -- translated from the original Optik
 # test suite to this PyUnit-based version.
 #
-# $Id$
+# $Id: test_optparse.py 83540 2010-08-02 18:40:55Z ezio.melotti $
 #
 
 import sys
 import os
 import re
 import copy
+import types
 import unittest
 
-from io import StringIO
-from test import support
+from StringIO import StringIO
+from test import test_support
 
 
-from optparse import make_option, Option, \
-     TitledHelpFormatter, OptionParser, OptionGroup, \
-     SUPPRESS_USAGE, OptionError, OptionConflictError, \
+from optparse import make_option, Option, IndentedHelpFormatter, \
+     TitledHelpFormatter, OptionParser, OptionContainer, OptionGroup, \
+     SUPPRESS_HELP, SUPPRESS_USAGE, OptionError, OptionConflictError, \
      BadOptionError, OptionValueError, Values
 from optparse import _match_abbrev
 from optparse import _parse_num
@@ -104,10 +107,10 @@ Args were %(args)s.""" % locals ())
 
         try:
             func(*args, **kwargs)
-        except expected_exception as err:
+        except expected_exception, err:
             actual_message = str(err)
             if isinstance(expected_message, retype):
-                self.assertTrue(expected_message.search(actual_message),
+                self.assert_(expected_message.search(actual_message),
                              """\
 expected exception message pattern:
 /%s/
@@ -142,7 +145,7 @@ and kwargs %(kwargs)r
         """
         try:
             self.parser.parse_args(cmdline_args)
-        except InterceptedError as err:
+        except InterceptedError, err:
             self.assertEqual(err.error_message, expected_output)
         else:
             self.assertFalse("expected parse failure")
@@ -154,17 +157,20 @@ and kwargs %(kwargs)r
                      expected_error=None):
         """Assert the parser prints the expected output on stdout."""
         save_stdout = sys.stdout
+        encoding = getattr(save_stdout, 'encoding', None)
         try:
             try:
                 sys.stdout = StringIO()
+                if encoding:
+                    sys.stdout.encoding = encoding
                 self.parser.parse_args(cmdline_args)
             finally:
                 output = sys.stdout.getvalue()
                 sys.stdout = save_stdout
 
-        except InterceptedError as err:
-            self.assertTrue(
-                isinstance(output, str),
+        except InterceptedError, err:
+            self.assert_(
+                type(output) is types.StringType,
                 "expected output to be an ordinary string, not %r"
                 % type(output))
 
@@ -336,7 +342,7 @@ class TestOptionParser(BaseTest):
 
     def test_get_option(self):
         opt1 = self.parser.get_option("-v")
-        self.assertIsInstance(opt1, Option)
+        self.assert_(isinstance(opt1, Option))
         self.assertEqual(opt1._short_opts, ["-v", "-n"])
         self.assertEqual(opt1._long_opts, ["--verbose", "--noisy"])
         self.assertEqual(opt1.action, "store_true")
@@ -347,33 +353,33 @@ class TestOptionParser(BaseTest):
         opt2 = self.parser.get_option("--verbose")
         opt3 = self.parser.get_option("-n")
         opt4 = self.parser.get_option("--noisy")
-        self.assertTrue(opt1 is opt2 is opt3 is opt4)
+        self.assert_(opt1 is opt2 is opt3 is opt4)
 
     def test_has_option(self):
-        self.assertTrue(self.parser.has_option("-v"))
-        self.assertTrue(self.parser.has_option("--verbose"))
+        self.assert_(self.parser.has_option("-v"))
+        self.assert_(self.parser.has_option("--verbose"))
 
-    def assertTrueremoved(self):
-        self.assertTrue(self.parser.get_option("-v") is None)
-        self.assertTrue(self.parser.get_option("--verbose") is None)
-        self.assertTrue(self.parser.get_option("-n") is None)
-        self.assertTrue(self.parser.get_option("--noisy") is None)
+    def assert_removed(self):
+        self.assert_(self.parser.get_option("-v") is None)
+        self.assert_(self.parser.get_option("--verbose") is None)
+        self.assert_(self.parser.get_option("-n") is None)
+        self.assert_(self.parser.get_option("--noisy") is None)
 
-        self.assertFalse(self.parser.has_option("-v"))
-        self.assertFalse(self.parser.has_option("--verbose"))
-        self.assertFalse(self.parser.has_option("-n"))
-        self.assertFalse(self.parser.has_option("--noisy"))
+        self.failIf(self.parser.has_option("-v"))
+        self.failIf(self.parser.has_option("--verbose"))
+        self.failIf(self.parser.has_option("-n"))
+        self.failIf(self.parser.has_option("--noisy"))
 
-        self.assertTrue(self.parser.has_option("-q"))
-        self.assertTrue(self.parser.has_option("--silent"))
+        self.assert_(self.parser.has_option("-q"))
+        self.assert_(self.parser.has_option("--silent"))
 
     def test_remove_short_opt(self):
         self.parser.remove_option("-n")
-        self.assertTrueremoved()
+        self.assert_removed()
 
     def test_remove_long_opt(self):
         self.parser.remove_option("--verbose")
-        self.assertTrueremoved()
+        self.assert_removed()
 
     def test_remove_nonexistent(self):
         self.assertRaises(self.parser.remove_option, ('foo',), None,
@@ -423,13 +429,19 @@ class TestTypeAliases(BaseTest):
 
     def test_str_aliases_string(self):
         self.parser.add_option("-s", type="str")
-        self.assertEqual(self.parser.get_option("-s").type, "string")
+        self.assertEquals(self.parser.get_option("-s").type, "string")
 
-    def test_type_object(self):
+    def test_new_type_object(self):
         self.parser.add_option("-s", type=str)
-        self.assertEqual(self.parser.get_option("-s").type, "string")
+        self.assertEquals(self.parser.get_option("-s").type, "string")
         self.parser.add_option("-x", type=int)
-        self.assertEqual(self.parser.get_option("-x").type, "int")
+        self.assertEquals(self.parser.get_option("-x").type, "int")
+
+    def test_old_type_object(self):
+        self.parser.add_option("-s", type=types.StringType)
+        self.assertEquals(self.parser.get_option("-s").type, "string")
+        self.parser.add_option("-x", type=types.IntType)
+        self.assertEquals(self.parser.get_option("-x").type, "int")
 
 
 # Custom type for testing processing of default values.
@@ -993,7 +1005,7 @@ class TestOptionGroup(BaseTest):
                                              description="Some more options")
         group.set_title("Bacon")
         group.add_option("--bacon", type="int")
-        self.assertTrue(self.parser.get_option_group("--bacon"), group)
+        self.assert_(self.parser.get_option_group("--bacon"), group)
 
 # -- Test extending and parser.parse_args() ----------------------------
 
@@ -1005,10 +1017,10 @@ class TestExtendAddTypes(BaseTest):
         self.parser.add_option("-f", "--file", type="file", dest="file")
 
     def tearDown(self):
-        if os.path.isdir(support.TESTFN):
-            os.rmdir(support.TESTFN)
-        elif os.path.isfile(support.TESTFN):
-            os.unlink(support.TESTFN)
+        if os.path.isdir(test_support.TESTFN):
+            os.rmdir(test_support.TESTFN)
+        elif os.path.isfile(test_support.TESTFN):
+            os.unlink(test_support.TESTFN)
 
     class MyOption (Option):
         def check_file(option, opt, value):
@@ -1023,21 +1035,21 @@ class TestExtendAddTypes(BaseTest):
         TYPE_CHECKER["file"] = check_file
 
     def test_filetype_ok(self):
-        open(support.TESTFN, "w").close()
-        self.assertParseOK(["--file", support.TESTFN, "-afoo"],
-                           {'file': support.TESTFN, 'a': 'foo'},
+        open(test_support.TESTFN, "w").close()
+        self.assertParseOK(["--file", test_support.TESTFN, "-afoo"],
+                           {'file': test_support.TESTFN, 'a': 'foo'},
                            [])
 
     def test_filetype_noexist(self):
-        self.assertParseFail(["--file", support.TESTFN, "-afoo"],
+        self.assertParseFail(["--file", test_support.TESTFN, "-afoo"],
                              "%s: file does not exist" %
-                             support.TESTFN)
+                             test_support.TESTFN)
 
     def test_filetype_notfile(self):
-        os.mkdir(support.TESTFN)
-        self.assertParseFail(["--file", support.TESTFN, "-afoo"],
+        os.mkdir(test_support.TESTFN)
+        self.assertParseFail(["--file", test_support.TESTFN, "-afoo"],
                              "%s: not a regular file" %
-                             support.TESTFN)
+                             test_support.TESTFN)
 
 
 class TestExtendAddActions(BaseTest):
@@ -1089,15 +1101,15 @@ class TestCallback(BaseTest):
         if opt == "-x":
             self.assertEqual(option._short_opts, ["-x"])
             self.assertEqual(option._long_opts, [])
-            self.assertTrue(parser_ is self.parser)
-            self.assertTrue(value is None)
+            self.assert_(parser_ is self.parser)
+            self.assert_(value is None)
             self.assertEqual(vars(parser_.values), {'filename': None})
 
             parser_.values.x = 42
         elif opt == "--file":
             self.assertEqual(option._short_opts, ["-f"])
             self.assertEqual(option._long_opts, ["--file"])
-            self.assertTrue(parser_ is self.parser)
+            self.assert_(parser_ is self.parser)
             self.assertEqual(value, "foo")
             self.assertEqual(vars(parser_.values), {'filename': None, 'x': 42})
 
@@ -1135,7 +1147,7 @@ class TestCallbackExtraArgs(BaseTest):
 
     def process_tuple(self, option, opt, value, parser_, len, type):
         self.assertEqual(len, 3)
-        self.assertTrue(type is int)
+        self.assert_(type is int)
 
         if opt == "-p":
             self.assertEqual(value, "1,2,3")
@@ -1226,7 +1238,8 @@ class TestCallbackVarArgs(BaseTest):
                                                option_list=options)
 
     def variable_args(self, option, opt, value, parser):
-        self.assertTrue(value is None)
+        self.assert_(value is None)
+        done = 0
         value = []
         rargs = parser.rargs
         while rargs:
@@ -1281,7 +1294,7 @@ class ConflictBase(BaseTest):
 
 class TestConflict(ConflictBase):
     """Use the default conflict resolution for Optik 1.2: error."""
-    def assertTrueconflict_error(self, func):
+    def assert_conflict_error(self, func):
         err = self.assertRaises(
             func, ("-v", "--version"), {'action' : "callback",
                                         'callback' : self.show_version,
@@ -1293,11 +1306,11 @@ class TestConflict(ConflictBase):
         self.assertEqual(err.option_id, "-v/--version")
 
     def test_conflict_error(self):
-        self.assertTrueconflict_error(self.parser.add_option)
+        self.assert_conflict_error(self.parser.add_option)
 
     def test_conflict_error_group(self):
         group = OptionGroup(self.parser, "Group 1")
-        self.assertTrueconflict_error(group.add_option)
+        self.assert_conflict_error(group.add_option)
 
     def test_no_such_conflict_handler(self):
         self.assertRaises(
@@ -1317,8 +1330,8 @@ class TestConflictResolve(ConflictBase):
         verbose_opt = self.parser.get_option("--verbose")
         version_opt = self.parser.get_option("--version")
 
-        self.assertTrue(v_opt is version_opt)
-        self.assertTrue(v_opt is not verbose_opt)
+        self.assert_(v_opt is version_opt)
+        self.assert_(v_opt is not verbose_opt)
         self.assertEqual(v_opt._long_opts, ["--version"])
         self.assertEqual(version_opt._short_opts, ["-v"])
         self.assertEqual(version_opt._long_opts, ["--version"])
@@ -1448,11 +1461,15 @@ class TestHelp(BaseTest):
         # we must restore its original value -- otherwise, this test
         # screws things up for other tests when it's part of the Python
         # test suite.
-        with support.EnvironmentVarGuard() as env:
-            env['COLUMNS'] = str(columns)
+        with test_support.EnvironmentVarGuard() as env:
+            env.set('COLUMNS', str(columns))
             return InterceptingOptionParser(option_list=options)
 
     def assertHelpEquals(self, expected_output):
+        if type(expected_output) is types.UnicodeType:
+            encoding = self.parser._get_encoding(sys.stdout)
+            expected_output = expected_output.encode(encoding, "replace")
+
         save_argv = sys.argv[:]
         try:
             # Make optparse believe bar.py is being executed.
@@ -1473,8 +1490,8 @@ class TestHelp(BaseTest):
         self.assertHelpEquals(_expected_help_long_opts_first)
 
     def test_help_title_formatter(self):
-        with support.EnvironmentVarGuard() as env:
-            env["COLUMNS"] = "80"
+        with test_support.EnvironmentVarGuard() as env:
+            env.set("COLUMNS", "80")
             self.parser.formatter = TitledHelpFormatter()
             self.assertHelpEquals(_expected_help_title_formatter)
 
@@ -1487,8 +1504,8 @@ class TestHelp(BaseTest):
 
     def test_help_unicode(self):
         self.parser = InterceptingOptionParser(usage=SUPPRESS_USAGE)
-        self.parser.add_option("-a", action="store_true", help="ol\u00E9!")
-        expect = """\
+        self.parser.add_option("-a", action="store_true", help=u"ol\u00E9!")
+        expect = u"""\
 Options:
   -h, --help  show this help message and exit
   -a          ol\u00E9!
@@ -1497,8 +1514,8 @@ Options:
 
     def test_help_unicode_description(self):
         self.parser = InterceptingOptionParser(usage=SUPPRESS_USAGE,
-                                               description="ol\u00E9!")
-        expect = """\
+                                               description=u"ol\u00E9!")
+        expect = u"""\
 ol\u00E9!
 
 Options:
@@ -1565,7 +1582,7 @@ class TestParseNumber(BaseTest):
     def setUp(self):
         self.parser = InterceptingOptionParser()
         self.parser.add_option("-n", type=int)
-        self.parser.add_option("-l", type=int)
+        self.parser.add_option("-l", type=long)
 
     def test_parse_num_fail(self):
         self.assertRaises(
@@ -1573,17 +1590,17 @@ class TestParseNumber(BaseTest):
             ValueError,
             re.compile(r"invalid literal for int().*: '?'?"))
         self.assertRaises(
-            _parse_num, ("0xOoops", int), {},
+            _parse_num, ("0xOoops", long), {},
             ValueError,
-            re.compile(r"invalid literal for int().*: s?'?0xOoops'?"))
+            re.compile(r"invalid literal for long().*: '?0xOoops'?"))
 
     def test_parse_num_ok(self):
         self.assertEqual(_parse_num("0", int), 0)
         self.assertEqual(_parse_num("0x10", int), 16)
-        self.assertEqual(_parse_num("0XA", int), 10)
-        self.assertEqual(_parse_num("010", int), 8)
+        self.assertEqual(_parse_num("0XA", long), 10L)
+        self.assertEqual(_parse_num("010", long), 8L)
         self.assertEqual(_parse_num("0b11", int), 3)
-        self.assertEqual(_parse_num("0b", int), 0)
+        self.assertEqual(_parse_num("0b", long), 0L)
 
     def test_numeric_options(self):
         self.assertParseOK(["-n", "42", "-l", "0x20"],
@@ -1593,13 +1610,13 @@ class TestParseNumber(BaseTest):
         self.assertParseFail(["-n008"],
                              "option -n: invalid integer value: '008'")
         self.assertParseFail(["-l0b0123"],
-                             "option -l: invalid integer value: '0b0123'")
+                             "option -l: invalid long integer value: '0b0123'")
         self.assertParseFail(["-l", "0x12x"],
-                             "option -l: invalid integer value: '0x12x'")
+                             "option -l: invalid long integer value: '0x12x'")
 
 
 def test_main():
-    support.run_unittest(__name__)
+    test_support.run_unittest(__name__)
 
 if __name__ == '__main__':
     test_main()

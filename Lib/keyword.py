@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 
 """Keywords (from "graminit.c")
 
@@ -14,9 +14,6 @@ __all__ = ["iskeyword", "kwlist"]
 
 kwlist = [
 #--start keywords--
-        'False',
-        'None',
-        'True',
         'and',
         'as',
         'assert',
@@ -28,6 +25,7 @@ kwlist = [
         'elif',
         'else',
         'except',
+        'exec',
         'finally',
         'for',
         'from',
@@ -37,10 +35,10 @@ kwlist = [
         'in',
         'is',
         'lambda',
-        'nonlocal',
         'not',
         'or',
         'pass',
+        'print',
         'raise',
         'return',
         'try',
@@ -61,19 +59,21 @@ def main():
     else: optfile = "Lib/keyword.py"
 
     # scan the source file for keywords
-    with open(iptfile) as fp:
-        strprog = re.compile('"([^"]+)"')
-        lines = []
-        for line in fp:
-            if '{1, "' in line:
-                match = strprog.search(line)
-                if match:
-                    lines.append("        '" + match.group(1) + "',\n")
+    fp = open(iptfile)
+    strprog = re.compile('"([^"]+)"')
+    lines = []
+    for line in fp:
+        if '{1, "' in line:
+            match = strprog.search(line)
+            if match:
+                lines.append("        '" + match.group(1) + "',\n")
+    fp.close()
     lines.sort()
 
     # load the output skeleton from the target
-    with open(optfile) as fp:
-        format = fp.readlines()
+    fp = open(optfile)
+    format = fp.readlines()
+    fp.close()
 
     # insert the lines of keywords
     try:

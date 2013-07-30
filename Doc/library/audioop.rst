@@ -1,3 +1,4 @@
+
 :mod:`audioop` --- Manipulate raw audio data
 ============================================
 
@@ -7,7 +8,8 @@
 
 The :mod:`audioop` module contains some useful operations on sound fragments.
 It operates on sound fragments consisting of signed integer samples 8, 16 or 32
-bits wide, stored in Python strings.  All scalar items are integers, unless
+bits wide, stored in Python strings.  This is the same format as used by the
+:mod:`al` and :mod:`sunaudiodev` modules.  All scalar items are integers, unless
 specified otherwise.
 
 .. index::
@@ -51,6 +53,8 @@ The module defines the following variables and functions:
    Convert sound fragments in a-LAW encoding to linearly encoded sound fragments.
    a-LAW encoding always uses 8 bits samples, so *width* refers only to the sample
    width of the output fragment here.
+
+   .. versionadded:: 2.5
 
 
 .. function:: avg(fragment, width)
@@ -129,6 +133,8 @@ The module defines the following variables and functions:
    Python string.  a-LAW is an audio encoding format whereby you get a dynamic
    range of about 13 bits using only 8 bit samples.  It is used by the Sun audio
    hardware, among others.
+
+   .. versionadded:: 2.5
 
 
 .. function:: lin2lin(fragment, width, newwidth)
@@ -230,8 +236,8 @@ and recombined later.  Here is an example of how to do that::
    def mul_stereo(sample, width, lfactor, rfactor):
        lsample = audioop.tomono(sample, width, 1, 0)
        rsample = audioop.tomono(sample, width, 0, 1)
-       lsample = audioop.mul(lsample, width, lfactor)
-       rsample = audioop.mul(rsample, width, rfactor)
+       lsample = audioop.mul(sample, width, lfactor)
+       rsample = audioop.mul(sample, width, rfactor)
        lsample = audioop.tostereo(lsample, width, 1, 0)
        rsample = audioop.tostereo(rsample, width, 0, 1)
        return audioop.add(lsample, rsample, width)

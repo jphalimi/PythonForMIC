@@ -4,9 +4,6 @@
 .. module:: __future__
    :synopsis: Future statement definitions
 
-**Source code:** :source:`Lib/__future__.py`
-
---------------
 
 :mod:`__future__` is a real module, and serves three purposes:
 
@@ -29,7 +26,7 @@ Each statement in :file:`__future__.py` is of the form::
 
 
 where, normally, *OptionalRelease* is less than *MandatoryRelease*, and both are
-5-tuples of the same form as :data:`sys.version_info`::
+5-tuples of the same form as ``sys.version_info``::
 
    (PY_MAJOR_VERSION, # the 2 in 2.1.0a3; an int
     PY_MINOR_VERSION, # the 1; an int
@@ -87,7 +84,6 @@ language using this mechanism:
 | unicode_literals | 2.6.0a2     | 3.0          | :pep:`3112`:                                |
 |                  |             |              | *Bytes literals in Python 3000*             |
 +------------------+-------------+--------------+---------------------------------------------+
-
 
 .. seealso::
 

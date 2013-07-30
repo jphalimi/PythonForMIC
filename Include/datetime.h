@@ -1,6 +1,6 @@
 /*  datetime.h
  */
-#ifndef Py_LIMITED_API
+
 #ifndef DATETIME_H
 #define DATETIME_H
 #ifdef __cplusplus
@@ -34,7 +34,7 @@ extern "C" {
 typedef struct
 {
     PyObject_HEAD
-    Py_hash_t hashcode;         /* -1 when unknown */
+    long hashcode;              /* -1 when unknown */
     int days;                   /* -MAX_DELTA_DAYS <= days <= MAX_DELTA_DAYS */
     int seconds;                /* 0 <= seconds < 24*3600 is invariant */
     int microseconds;           /* 0 <= microseconds < 1000000 is invariant */
@@ -51,7 +51,7 @@ typedef struct
  */
 #define _PyTZINFO_HEAD          \
     PyObject_HEAD               \
-    Py_hash_t hashcode;         \
+    long hashcode;              \
     char hastzinfo;             /* boolean flag */
 
 /* No _PyDateTime_BaseTZInfo is allocated; it's just to have something
@@ -158,8 +158,9 @@ typedef struct {
 
 } PyDateTime_CAPI;
 
-#define PyDateTime_CAPSULE_NAME "datetime.datetime_CAPI"
 
+/* "magic" constant used to partially protect against developer mistakes. */
+#define DATETIME_API_MAGIC 0x414548d5
 
 #ifdef Py_BUILD_CORE
 
@@ -182,10 +183,18 @@ typedef struct {
 #else
 
 /* Define global variable for the C API and a macro for setting it. */
-static PyDateTime_CAPI *PyDateTimeAPI = NULL;
+static PyDateTime_CAPI *PyDateTimeAPI;
 
 #define PyDateTime_IMPORT \
-    PyDateTimeAPI = (PyDateTime_CAPI *)PyCapsule_Import(PyDateTime_CAPSULE_NAME, 0)
+    PyDateTimeAPI = (PyDateTime_CAPI*) PyCObject_Import("datetime", \
+                                                        "datetime_CAPI")
+
+/* This macro would be used if PyCObject_ImportEx() was created.
+#define PyDateTime_IMPORT \
+    PyDateTimeAPI = (PyDateTime_CAPI*) PyCObject_ImportEx("datetime", \
+                                                        "datetime_CAPI", \
+                                                        DATETIME_API_MAGIC)
+*/
 
 /* Macros for type checking when not building the Python core. */
 #define PyDate_Check(op) PyObject_TypeCheck(op, PyDateTimeAPI->DateType)
@@ -234,4 +243,3 @@ static PyDateTime_CAPI *PyDateTimeAPI = NULL;
 }
 #endif
 #endif
-#endif /* !Py_LIMITED_API */

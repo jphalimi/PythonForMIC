@@ -3,33 +3,7 @@
 #
 # multiprocessing/connection.py
 #
-# Copyright (c) 2006-2008, R Oudkerk
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-# 3. Neither the name of author nor the names of any contributors may be
-#    used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-# SUCH DAMAGE.
+# Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
 #
 
 __all__ = [ 'Client', 'Listener', 'Pipe' ]
@@ -90,7 +64,7 @@ def arbitrary_address(family):
         return tempfile.mktemp(prefix='listener-', dir=get_temp_dir())
     elif family == 'AF_PIPE':
         return tempfile.mktemp(prefix=r'\\.\pipe\pyc-%d-%d-' %
-                               (os.getpid(), next(_mmap_counter)))
+                               (os.getpid(), _mmap_counter.next()))
     else:
         raise ValueError('unrecognized family')
 
@@ -132,7 +106,7 @@ class Listener(object):
             self._listener = SocketListener(address, family, backlog)
 
         if authkey is not None and not isinstance(authkey, bytes):
-            raise TypeError('authkey should be a byte string')
+            raise TypeError, 'authkey should be a byte string'
 
         self._authkey = authkey
 
@@ -169,7 +143,7 @@ def Client(address, family=None, authkey=None):
         c = SocketClient(address)
 
     if authkey is not None and not isinstance(authkey, bytes):
-        raise TypeError('authkey should be a byte string')
+        raise TypeError, 'authkey should be a byte string'
 
     if authkey is not None:
         answer_challenge(c, authkey)
@@ -230,7 +204,7 @@ else:
 
         try:
             win32.ConnectNamedPipe(h1, win32.NULL)
-        except WindowsError as e:
+        except WindowsError, e:
             if e.args[0] != win32.ERROR_PIPE_CONNECTED:
                 raise
 
@@ -281,24 +255,25 @@ def SocketClient(address):
     Return a connection object connected to the socket given by `address`
     '''
     family = address_type(address)
-    with socket.socket( getattr(socket, family) ) as s:
-        t = _init_timeout()
+    s = socket.socket( getattr(socket, family) )
+    t = _init_timeout()
 
-        while 1:
-            try:
-                s.connect(address)
-            except socket.error as e:
-                if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
-                    debug('failed to connect to address %s', address)
-                    raise
-                time.sleep(0.01)
-            else:
-                break
+    while 1:
+        try:
+            s.connect(address)
+        except socket.error, e:
+            if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
+                debug('failed to connect to address %s', address)
+                raise
+            time.sleep(0.01)
         else:
-            raise
+            break
+    else:
+        raise
 
-        fd = duplicate(s.fileno())
+    fd = duplicate(s.fileno())
     conn = _multiprocessing.Connection(fd)
+    s.close()
     return conn
 
 #
@@ -342,7 +317,7 @@ if sys.platform == 'win32':
             handle = self._handle_queue.pop(0)
             try:
                 win32.ConnectNamedPipe(handle, win32.NULL)
-            except WindowsError as e:
+            except WindowsError, e:
                 if e.args[0] != win32.ERROR_PIPE_CONNECTED:
                     raise
             return _multiprocessing.PipeConnection(handle)
@@ -365,7 +340,7 @@ if sys.platform == 'win32':
                     address, win32.GENERIC_READ | win32.GENERIC_WRITE,
                     0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL
                     )
-            except WindowsError as e:
+            except WindowsError, e:
                 if e.args[0] not in (win32.ERROR_SEM_TIMEOUT,
                                      win32.ERROR_PIPE_BUSY) or _check_timeout(t):
                     raise
@@ -443,11 +418,11 @@ def _xml_loads(s):
 class XmlListener(Listener):
     def accept(self):
         global xmlrpclib
-        import xmlrpc.client as xmlrpclib
+        import xmlrpclib
         obj = Listener.accept(self)
         return ConnectionWrapper(obj, _xml_dumps, _xml_loads)
 
 def XmlClient(*args, **kwds):
     global xmlrpclib
-    import xmlrpc.client as xmlrpclib
+    import xmlrpclib
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)

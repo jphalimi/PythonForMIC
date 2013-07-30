@@ -1,3 +1,4 @@
+
 :mod:`symbol` --- Constants used with Python parse trees
 ========================================================
 
@@ -5,9 +6,6 @@
    :synopsis: Constants representing internal nodes of the parse tree.
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 
-**Source code:** :source:`Lib/symbol.py`
-
---------------
 
 This module provides constants which represent the numeric values of internal
 nodes of the parse tree.  Unlike most Python constants, these use lower-case

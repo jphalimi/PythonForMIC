@@ -37,7 +37,7 @@ NOTE:
    running a Python core buildbot test slave; see SUBPROJECTS below)
 
 When using the Debug setting, the output files have a _d added to
-their name:  python32_d.dll, python_d.exe, parser_d.pyd, and so on. Both
+their name:  python30_d.dll, python_d.exe, parser_d.pyd, and so on. Both
 the build and rt batch files accept a -d option for debug builds.
 
 The 32bit builds end up in the solution folder PCbuild while the x64 builds
@@ -55,7 +55,7 @@ PC/VC6/
     Visual C++ 6.0
 PC/VS7.1/
     Visual Studio 2003 (7.1)
-PC/VS8.0/
+PCbuild8/
     Visual Studio 2005 (8.0)
 
 
@@ -103,10 +103,13 @@ winsound
     play sounds (typically .wav files) under Windows
 
 Python-controlled subprojects that wrap external projects:
+_bsddb
+    Wraps Berkeley DB 4.7.25, which is currently built by _bsddb.vcproj.
+    project (see below).
 _sqlite3
-    Wraps SQLite 3.7.4, which is currently built by sqlite3.vcproj (see below).
+    Wraps SQLite 3.5.9, which is currently built by sqlite3.vcproj (see below).
 _tkinter
-    Wraps the Tk windowing system.  Unlike _sqlite3, there's no
+    Wraps the Tk windowing system.  Unlike _bsddb and _sqlite3, there's no
     corresponding tcltk.vcproj-type project that builds Tcl/Tk from vcproj's
     within our pcbuild.sln, which means this module expects to find a
     pre-built Tcl/Tk in either ..\..\tcltk for 32-bit or ..\..\tcltk64 for
@@ -139,7 +142,7 @@ _ssl
 
     Get the source code through
 
-    svn export http://svn.python.org/projects/external/openssl-1.0.0a
+    svn export http://svn.python.org/projects/external/openssl-0.9.8l
 
     ** NOTE: if you use the Tools\buildbot\external(-amd64).bat approach for
     obtaining external sources then you don't need to manually get the source
@@ -156,7 +159,7 @@ _ssl
     nasmw.exe.
 
     You can also install ActivePerl from
-        http://www.activestate.com/activeperl/
+        http://www.activestate.com/Products/ActivePerl/
     if you like to use the official sources instead of the files from 
     python's subversion repository. The svn version contains pre-build
     makefiles and assembly files.
@@ -212,8 +215,8 @@ So for a release build, you'd call it as:
 
 This will be cleaned up in the future; ideally Tcl/Tk will be brought into our
 pcbuild.sln as custom .vcproj files, just as we've recently done with the
-sqlite3.vcproj file, which will remove the need for Tcl/Tk to be built
-separately via a batch file.
+_bsddb.vcproj and sqlite3.vcproj files, which will remove the need for
+Tcl/Tk to be built separately via a batch file.
 
 XXX trent.nelson 02-Apr-08:
     Having the external subprojects in ..\.. relative to this directory is a

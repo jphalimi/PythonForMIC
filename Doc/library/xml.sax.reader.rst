@@ -1,3 +1,4 @@
+
 :mod:`xml.sax.xmlreader` --- Interface for XML parsers
 ======================================================
 
@@ -6,6 +7,8 @@
 .. moduleauthor:: Lars Marius Garshol <larsga@garshol.priv.no>
 .. sectionauthor:: Martin v. Löwis <martin@v.loewis.de>
 
+
+.. versionadded:: 2.0
 
 SAX parsers implement the :class:`XMLReader` interface. They are implemented in
 a Python module, which must provide a function :func:`create_parser`. This
@@ -47,7 +50,7 @@ a new  parser object.
    methods may return ``None``.
 
 
-.. class:: InputSource(system_id=None)
+.. class:: InputSource([systemId])
 
    Encapsulation of the information needed by the :class:`XMLReader` to read
    entities.
@@ -154,7 +157,7 @@ The :class:`XMLReader` interface supports the following methods:
    Allow an application to set the locale for errors and warnings.
 
    SAX parsers are not required to provide localization for errors and warnings; if
-   they cannot support the requested locale, however, they must raise a SAX
+   they cannot support the requested locale, however, they must throw a SAX
    exception.  Applications may request a locale change in the middle of a parse.
 
 
@@ -306,7 +309,7 @@ InputSource Objects
 .. method:: InputSource.setCharacterStream(charfile)
 
    Set the character stream for this input source. (The stream must be a Python 1.6
-   Unicode-wrapped file-like that performs conversion to strings.)
+   Unicode-wrapped file-like that performs conversion to Unicode strings.)
 
    If there is a character stream specified, the SAX parser will ignore any byte
    stream and will not attempt to open a URI connection to the system identifier.
@@ -323,9 +326,8 @@ The :class:`Attributes` Interface
 ---------------------------------
 
 :class:`Attributes` objects implement a portion of the mapping protocol,
-including the methods :meth:`copy`, :meth:`get`, :meth:`__contains__`,
-:meth:`items`, :meth:`keys`, and :meth:`values`.  The following methods
-are also provided:
+including the methods :meth:`copy`, :meth:`get`, :meth:`has_key`, :meth:`items`,
+:meth:`keys`, and :meth:`values`.  The following methods are also provided:
 
 
 .. method:: Attributes.getLength()

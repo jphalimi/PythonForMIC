@@ -1,3 +1,4 @@
+
 :mod:`pydoc` --- Documentation generator and online help system
 ===============================================================
 
@@ -7,14 +8,12 @@
 .. sectionauthor:: Ka-Ping Yee <ping@lfw.org>
 
 
+.. versionadded:: 2.1
+
 .. index::
    single: documentation; generation
    single: documentation; online
    single: help; online
-
-**Source code:** :source:`Lib/pydoc.py`
-
---------------
 
 The :mod:`pydoc` module automatically generates documentation from Python
 modules.  The documentation can be presented as pages of text on the console,
@@ -44,43 +43,30 @@ produced for that file.
    executed on that occasion.  Use an ``if __name__ == '__main__':`` guard to
    only execute code when a file is invoked as a script and not just imported.
 
-Specifying a ``-w`` flag before the argument will cause HTML documentation
+Specifying a :option:`-w` flag before the argument will cause HTML documentation
 to be written out to a file in the current directory, instead of displaying text
 on the console.
 
-Specifying a ``-k`` flag before the argument will search the synopsis
+Specifying a :option:`-k` flag before the argument will search the synopsis
 lines of all available modules for the keyword given as the argument, again in a
 manner similar to the Unix :program:`man` command.  The synopsis line of a
 module is the first line of its documentation string.
 
 You can also use :program:`pydoc` to start an HTTP server on the local machine
-that will serve documentation to visiting Web browsers.  :program:`pydoc -p 1234`
-will start a HTTP server on port 1234, allowing you to browse the
-documentation at ``http://localhost:1234/`` in your preferred Web browser.
-Specifying ``0`` as the port number will select an arbitrary unused port.
-
-:program:`pydoc -g` will start the server and additionally bring up a
-small :mod:`tkinter`\ -based graphical interface to help you search for
-documentation pages.  The ``-g`` option is deprecated, since the server can
-now be controlled directly from HTTP clients.
-
-:program:`pydoc -b` will start the server and additionally open a web
-browser to a module index page.  Each served page has a navigation bar at the
-top where you can *Get* help on an individual item, *Search* all modules with a
-keyword in their synopsis line, and go to the *Module index*, *Topics* and
-*Keywords* pages.
+that will serve documentation to visiting Web browsers. :program:`pydoc`
+:option:`-p 1234` will start a HTTP server on port 1234, allowing you to browse
+the documentation at ``http://localhost:1234/`` in your preferred Web browser.
+:program:`pydoc` :option:`-g` will start the server and additionally bring up a
+small :mod:`Tkinter`\ -based graphical interface to help you search for
+documentation pages.
 
 When :program:`pydoc` generates documentation, it uses the current environment
-and path to locate modules.  Thus, invoking :program:`pydoc spam`
+and path to locate modules.  Thus, invoking :program:`pydoc` :option:`spam`
 documents precisely the version of the module you would get if you started the
 Python interpreter and typed ``import spam``.
 
 Module docs for core modules are assumed to reside in
-``http://docs.python.org/X.Y/library/`` where ``X`` and ``Y`` are the
-major and minor version numbers of the Python interpreter.  This can
-be overridden by setting the :envvar:`PYTHONDOCS` environment variable
-to a different URL or to a local directory containing the Library
-Reference Manual pages.
+http://docs.python.org/library/.  This can be overridden by setting the
+:envvar:`PYTHONDOCS` environment variable to a different URL or to a local
+directory containing the Library Reference Manual pages.
 
-.. versionchanged:: 3.2
-   Added the ``-b`` option, deprecated the ``-g`` option.

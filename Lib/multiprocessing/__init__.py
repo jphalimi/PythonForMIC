@@ -38,7 +38,6 @@
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-# SUCH DAMAGE.
 #
 
 __version__ = '0.70a1'
@@ -80,6 +79,7 @@ class TimeoutError(ProcessError):
 class AuthenticationError(ProcessError):
     pass
 
+# This is down here because _multiprocessing uses BufferTooShort
 import _multiprocessing
 
 #
@@ -115,12 +115,8 @@ def cpu_count():
         except (ValueError, KeyError):
             num = 0
     elif 'bsd' in sys.platform or sys.platform == 'darwin':
-        comm = '/sbin/sysctl -n hw.ncpu'
-        if sys.platform == 'darwin':
-            comm = '/usr' + comm
         try:
-            with os.popen(comm) as p:
-                num = int(p.read())
+            num = int(os.popen('sysctl -n hw.ncpu').read())
         except ValueError:
             num = 0
     else:
@@ -223,12 +219,12 @@ def JoinableQueue(maxsize=0):
     from multiprocessing.queues import JoinableQueue
     return JoinableQueue(maxsize)
 
-def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None):
+def Pool(processes=None, initializer=None, initargs=()):
     '''
     Returns a process pool object
     '''
     from multiprocessing.pool import Pool
-    return Pool(processes, initializer, initargs, maxtasksperchild)
+    return Pool(processes, initializer, initargs)
 
 def RawValue(typecode_or_type, *args):
     '''

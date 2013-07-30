@@ -1,3 +1,4 @@
+
 :mod:`winsound` --- Sound-playing interface for Windows
 =======================================================
 
@@ -7,6 +8,8 @@
 .. moduleauthor:: Toby Dickenson <htrd90@zepler.org>
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 
+
+.. versionadded:: 1.5.2
 
 The :mod:`winsound` module provides access to the basic sound-playing machinery
 provided by Windows platforms.  It includes functions and several constants.
@@ -19,10 +22,12 @@ provided by Windows platforms.  It includes functions and several constants.
    parameter specifies the number of milliseconds the sound should last.  If the
    system is not able to beep the speaker, :exc:`RuntimeError` is raised.
 
+   .. versionadded:: 1.6
+
 
 .. function:: PlaySound(sound, flags)
 
-   Call the underlying :c:func:`PlaySound` function from the Platform API.  The
+   Call the underlying :cfunc:`PlaySound` function from the Platform API.  The
    *sound* parameter may be a filename, audio data as a string, or ``None``.  Its
    interpretation depends on the value of *flags*, which can be a bitwise ORed
    combination of the constants described below. If the *sound* parameter is
@@ -30,14 +35,16 @@ provided by Windows platforms.  It includes functions and several constants.
    indicates an error, :exc:`RuntimeError` is raised.
 
 
-.. function:: MessageBeep(type=MB_OK)
+.. function:: MessageBeep([type=MB_OK])
 
-   Call the underlying :c:func:`MessageBeep` function from the Platform API.  This
+   Call the underlying :cfunc:`MessageBeep` function from the Platform API.  This
    plays a sound as specified in the registry.  The *type* argument specifies which
    sound to play; possible values are ``-1``, ``MB_ICONASTERISK``,
    ``MB_ICONEXCLAMATION``, ``MB_ICONHAND``, ``MB_ICONQUESTION``, and ``MB_OK``, all
    described below.  The value ``-1`` produces a "simple beep"; this is the final
    fallback if a sound cannot be played otherwise.
+
+   .. versionadded:: 2.3
 
 
 .. data:: SND_FILENAME

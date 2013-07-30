@@ -1,7 +1,6 @@
 """Tests for distutils.unixccompiler."""
 import sys
 import unittest
-from test.support import run_unittest
 
 from distutils import sysconfig
 from distutils.unixccompiler import UnixCCompiler
@@ -71,7 +70,7 @@ class UnixCCompilerTestCase(unittest.TestCase):
             elif v == 'GNULD':
                 return 'yes'
         sysconfig.get_config_var = gcv
-        self.assertEqual(self.cc.rpath_foo(), '-Wl,--enable-new-dtags,-R/foo')
+        self.assertEqual(self.cc.rpath_foo(), '-Wl,-R/foo')
 
         # GCC non-GNULD
         sys.platform = 'bar'
@@ -92,7 +91,7 @@ class UnixCCompilerTestCase(unittest.TestCase):
             elif v == 'GNULD':
                 return 'yes'
         sysconfig.get_config_var = gcv
-        self.assertEqual(self.cc.rpath_foo(), '-Wl,--enable-new-dtags,-R/foo')
+        self.assertEqual(self.cc.rpath_foo(), '-Wl,-R/foo')
 
 
         # non-GCC GNULD
@@ -115,8 +114,16 @@ class UnixCCompilerTestCase(unittest.TestCase):
         sysconfig.get_config_var = gcv
         self.assertEqual(self.cc.rpath_foo(), '-R/foo')
 
+        # AIX C/C++ linker
+        sys.platform = 'aix'
+        def gcv(v):
+            return 'xxx'
+        sysconfig.get_config_var = gcv
+        self.assertEqual(self.cc.rpath_foo(), '-R/foo')
+
+
 def test_suite():
     return unittest.makeSuite(UnixCCompilerTestCase)
 
 if __name__ == "__main__":
-    run_unittest(test_suite())
+    unittest.main(defaultTest="test_suite")

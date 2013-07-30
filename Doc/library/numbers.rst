@@ -4,10 +4,12 @@
 .. module:: numbers
    :synopsis: Numeric abstract base classes (Complex, Real, Integral, etc.).
 
+.. versionadded:: 2.6
 
-The :mod:`numbers` module (:pep:`3141`) defines a hierarchy of numeric
-:term:`abstract base classes <abstract base class>` which progressively define
-more operations.  None of the types defined in this module can be instantiated.
+
+The :mod:`numbers` module (:pep:`3141`) defines a hierarchy of numeric abstract
+base classes which progressively define more operations.  None of the types
+defined in this module can be instantiated.
 
 
 .. class:: Number
@@ -45,7 +47,7 @@ The numeric tower
    To :class:`Complex`, :class:`Real` adds the operations that work on real
    numbers.
 
-   In short, those are: a conversion to :class:`float`, :func:`math.trunc`,
+   In short, those are: a conversion to :class:`float`, :func:`trunc`,
    :func:`round`, :func:`math.floor`, :func:`math.ceil`, :func:`divmod`, ``//``,
    ``%``, ``<``, ``<=``, ``>``, and ``>=``.
 
@@ -181,7 +183,7 @@ forward and reverse instances of any given operator. For example,
 
     def _operator_fallbacks(monomorphic_operator, fallback_operator):
         def forward(a, b):
-            if isinstance(b, (int, Fraction)):
+            if isinstance(b, (int, long, Fraction)):
                 return monomorphic_operator(a, b)
             elif isinstance(b, float):
                 return fallback_operator(float(a), b)

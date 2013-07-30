@@ -253,12 +253,8 @@ table.docutils {
 
 table.docutils td, table.docutils th {
     padding: 2px 5px 2px 5px;
-    border-left: 0;
-    background-color: #eef;
-}
-
-table.docutils td p.last, table.docutils th p.last {
-    margin-bottom: 0;
+    border-left: 0;    
+    background-color: #eef;    
 }
 
 table.field-list td, table.field-list th {
@@ -270,7 +266,7 @@ table.footnote td, table.footnote th {
 }
 
 table.docutils th {
-    border-top: 1px solid #cac;
+    border-top: 1px solid #cac;    
     background-color: #ede;
 }
 
@@ -280,7 +276,7 @@ th {
 }
 
 th.head {
-    text-align: center;
+    text-align: center;    
 }
 
 /* -- other body styles ----------------------------------------------------- */
@@ -333,7 +329,7 @@ dl.glossary dt {
     font-style: italic;
 }
 
-p.deprecated, p.deprecated-removed {
+p.deprecated {
     background-color: #ffe4e4;
     border: 1px solid #f66;
     padding: 7px
@@ -346,7 +342,7 @@ p.deprecated, p.deprecated-removed {
 }
 
 .footnote:target  {
-    background-color: #ffa;
+    background-color: #ffa
 }
 
 .impl-detail {
@@ -368,7 +364,6 @@ p.deprecated, p.deprecated-removed {
 
 pre {
     overflow: auto;
-    overflow-y: hidden;
 }
 
 td.linenos pre {

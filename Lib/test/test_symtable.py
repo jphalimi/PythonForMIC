@@ -3,8 +3,9 @@ Test the API of the symtable module.
 """
 import symtable
 import unittest
+import warnings
 
-from test import support
+from test import test_support
 
 
 TEST_CODE = """
@@ -27,7 +28,8 @@ def spam(a, b, *var, **kw):
     return internal
 
 def foo():
-    pass
+    exec 'm'
+    from sys import *
 
 def namespace_test(): pass
 def namespace_test(): pass
@@ -42,13 +44,31 @@ def find_block(block, name):
 
 class SymtableTest(unittest.TestCase):
 
-    top = symtable.symtable(TEST_CODE, "?", "exec")
+    with test_support.check_warnings(
+            ("import \* only allowed at module level", SyntaxWarning)):
+        top = symtable.symtable(TEST_CODE, "?", "exec")
     # These correspond to scopes in TEST_CODE
     Mine = find_block(top, "Mine")
     a_method = find_block(Mine, "a_method")
     spam = find_block(top, "spam")
     internal = find_block(spam, "internal")
     foo = find_block(top, "foo")
+
+    def test_noops(self):
+        # Check methods that don't work. They should warn and return False.
+        def check(w, msg):
+            self.assertEqual(str(w.message), msg)
+        sym = self.top.lookup("glob")
+        with test_support.check_warnings() as w:
+            warnings.simplefilter("always", DeprecationWarning)
+            self.assertFalse(sym.is_vararg())
+            check(w, "is_vararg() is obsolete and will be removed")
+            w.reset()
+            self.assertFalse(sym.is_keywordarg())
+            check(w, "is_keywordarg() is obsolete and will be removed")
+            w.reset()
+            self.assertFalse(sym.is_in_tuple())
+            check(w, "is_in_tuple() is obsolete and will be removed")
 
     def test_type(self):
         self.assertEqual(self.top.get_type(), "module")
@@ -60,8 +80,13 @@ class SymtableTest(unittest.TestCase):
     def test_optimized(self):
         self.assertFalse(self.top.is_optimized())
         self.assertFalse(self.top.has_exec())
+        self.assertFalse(self.top.has_import_star())
 
         self.assertTrue(self.spam.is_optimized())
+
+        self.assertFalse(self.foo.is_optimized())
+        self.assertTrue(self.foo.has_exec())
+        self.assertTrue(self.foo.has_import_star())
 
     def test_nested(self):
         self.assertFalse(self.top.is_nested())
@@ -82,7 +107,7 @@ class SymtableTest(unittest.TestCase):
         func = self.spam
         self.assertEqual(func.get_parameters(), ("a", "b", "kw", "var"))
         self.assertEqual(func.get_locals(),
-                         ("a", "b", "internal", "kw", "var", "x"))
+                         ("a", "b", "bar", "internal", "kw", "var", "x"))
         self.assertEqual(func.get_globals(), ("bar", "glob"))
         self.assertEqual(self.internal.get_frees(), ("x",))
 
@@ -122,7 +147,7 @@ class SymtableTest(unittest.TestCase):
         self.assertTrue(self.top.lookup("namespace_test").is_namespace())
         self.assertFalse(self.spam.lookup("x").is_namespace())
 
-        self.assertTrue(self.top.lookup("spam").get_namespace() is self.spam)
+        self.assert_(self.top.lookup("spam").get_namespace() is self.spam)
         ns_test = self.top.lookup("namespace_test")
         self.assertEqual(len(ns_test.get_namespaces()), 2)
         self.assertRaises(ValueError, ns_test.get_namespace)
@@ -170,7 +195,7 @@ class SymtableTest(unittest.TestCase):
 
 
 def test_main():
-    support.run_unittest(SymtableTest)
+    test_support.run_unittest(SymtableTest)
 
 if __name__ == '__main__':
     test_main()

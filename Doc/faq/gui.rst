@@ -6,73 +6,59 @@ Graphic User Interface FAQ
 
 .. contents::
 
-.. XXX need review for Python 3.
-
-
 General GUI Questions
 =====================
 
 What platform-independent GUI toolkits exist for Python?
-========================================================
+--------------------------------------------------------
 
-Depending on what platform(s) you are aiming at, there are several.  Some
-of them haven't been ported to Python 3 yet.  At least `Tkinter`_ and `Qt`_
-are known to be Python 3-compatible.
+Depending on what platform(s) you are aiming at, there are several.
 
 .. XXX check links
 
 Tkinter
--------
+'''''''
 
 Standard builds of Python include an object-oriented interface to the Tcl/Tk
-widget set, called :ref:`tkinter <Tkinter>`.  This is probably the easiest to
-install (since it comes included with most
-`binary distributions <http://www.python.org/download/>`_ of Python) and use.
-For more info about Tk, including pointers to the source, see the
-`Tcl/Tk home page <http://www.tcl.tk>`_.  Tcl/Tk is fully portable to the
-MacOS, Windows, and Unix platforms.
+widget set, called Tkinter.  This is probably the easiest to install and use.
+For more info about Tk, including pointers to the source, see the Tcl/Tk home
+page at http://www.tcl.tk.  Tcl/Tk is fully portable to the MacOS, Windows, and
+Unix platforms.
 
 wxWidgets
----------
+'''''''''
 
-wxWidgets (http://www.wxwidgets.org) is a free, portable GUI class
-library written in C++ that provides a native look and feel on a
-number of platforms, with Windows, MacOS X, GTK, X11, all listed as
-current stable targets.  Language bindings are available for a number
-of languages including Python, Perl, Ruby, etc.
+wxWidgets is a GUI class library written in C++ that's a portable
+interface to various platform-specific libraries, and that has a
+Python interface called `wxPython <http://www.wxpython.org>`__.
 
-wxPython (http://www.wxpython.org) is the Python binding for
-wxwidgets.  While it often lags slightly behind the official wxWidgets
-releases, it also offers a number of features via pure Python
-extensions that are not available in other language bindings.  There
-is an active wxPython user and developer community.
+wxWidgets preserves the look and feel of the
+underlying graphics toolkit, and has a large set of widgets and
+collection of GDI classes.  See `the wxWidgets page
+<http://www.wxwidgets.org>`_ for more details.
 
-Both wxWidgets and wxPython are free, open source, software with
-permissive licences that allow their use in commercial products as
-well as in freeware or shareware.
-
+wxWidgets supports Windows and MacOS; on Unix variants,
+it supports both GTk+ and Motif toolkits.
 
 Qt
----
+'''
 
-There are bindings available for the Qt toolkit (using either `PyQt
-<http://www.riverbankcomputing.co.uk/software/pyqt/>`_ or `PySide
-<http://www.pyside.org/>`_) and for KDE (`PyKDE <http://www.riverbankcomputing.co.uk/software/pykde/intro>`__).
-PyQt is currently more mature than PySide, but you must buy a PyQt license from
-`Riverbank Computing <http://www.riverbankcomputing.co.uk/software/pyqt/license>`_
-if you want to write proprietary applications.  PySide is free for all applications.
-
-Qt 4.5 upwards is licensed under the LGPL license; also, commercial licenses
-are available from `Nokia <http://qt.nokia.com/>`_.
+There are bindings available for the Qt toolkit (`PyQt
+<http://www.riverbankcomputing.co.uk/software/pyqt/>`_) and for KDE (`PyKDE <http://www.riverbankcomputing.co.uk/software/pykde/intro>`__).  If
+you're writing open source software, you don't need to pay for PyQt, but if you
+want to write proprietary applications, you must buy a PyQt license from
+`Riverbank Computing <http://www.riverbankcomputing.co.uk>`_ and (up to Qt 4.4;
+Qt 4.5 upwards is licensed under the LGPL license) a Qt license from `Trolltech
+<http://www.trolltech.com>`_.
 
 Gtk+
-----
+''''
 
 PyGtk bindings for the `Gtk+ toolkit <http://www.gtk.org>`_ have been
 implemented by James Henstridge; see <http://www.pygtk.org>.
 
 FLTK
-----
+''''
 
 Python bindings for `the FLTK toolkit <http://www.fltk.org>`_, a simple yet
 powerful and mature cross-platform windowing system, are available from `the
@@ -80,7 +66,7 @@ PyFLTK project <http://pyfltk.sourceforge.net>`_.
 
 
 FOX
-----
+'''
 
 A wrapper for `the FOX toolkit <http://www.fox-toolkit.org/>`_ called `FXpy
 <http://fxpy.sourceforge.net/>`_ is available.  FOX supports both Unix variants
@@ -88,13 +74,13 @@ and Windows.
 
 
 OpenGL
-------
+''''''
 
 For OpenGL bindings, see `PyOpenGL <http://pyopengl.sourceforge.net>`_.
 
 
 What platform-specific GUI toolkits exist for Python?
-========================================================
+-----------------------------------------------------
 
 `The Mac port <http://python.org/download/mac>`_ by Jack Jansen has a rich and
 ever-growing set of modules that support the native Mac toolbox calls.  The port
@@ -129,7 +115,7 @@ SAM (stand-alone modules), which is part of the Tix distribution
 (http://tix.sourceforge.net/).
 
 Build Tix with SAM enabled, perform the appropriate call to
-:c:func:`Tclsam_init`, etc. inside Python's
+:cfunc:`Tclsam_init`, etc. inside Python's
 :file:`Modules/tkappinit.c`, and link with libtclsam and libtksam (you
 might include the Tix libraries as well).
 
@@ -138,7 +124,7 @@ Can I have Tk events handled while waiting for I/O?
 ---------------------------------------------------
 
 Yes, and you don't even need threads!  But you'll have to restructure your I/O
-code a bit.  Tk has the equivalent of Xt's :c:func:`XtAddInput()` call, which allows you
+code a bit.  Tk has the equivalent of Xt's :cfunc:`XtAddInput()` call, which allows you
 to register a callback function which will be called from the Tk mainloop when
 I/O is possible on a file descriptor.  Here's what you need::
 
@@ -173,3 +159,6 @@ The most common cause is that the widget to which the binding applies doesn't
 have "keyboard focus".  Check out the Tk documentation for the focus command.
 Usually a widget is given the keyboard focus by clicking in it (but not for
 labels; see the takefocus option).
+
+
+

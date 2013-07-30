@@ -1,6 +1,6 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 import unittest
-from test import support
+from test import test_support
 import __future__
 
 GOOD_SERIALS = ("alpha", "beta", "candidate", "final")
@@ -15,7 +15,7 @@ class FutureTest(unittest.TestCase):
         for name in dir(__future__):
             obj = getattr(__future__, name, None)
             if obj is not None and isinstance(obj, __future__._Feature):
-                self.assertTrue(
+                self.assert_(
                     name in given_feature_names,
                     "%r should have been in all_feature_names" % name
                 )
@@ -30,7 +30,7 @@ class FutureTest(unittest.TestCase):
             optional = value.getOptionalRelease()
             mandatory = value.getMandatoryRelease()
 
-            a = self.assertTrue
+            a = self.assert_
             e = self.assertEqual
             def check(t, name):
                 a(isinstance(t, tuple), "%s isn't tuple" % name)
@@ -39,7 +39,7 @@ class FutureTest(unittest.TestCase):
                 a(isinstance(major, int), "%s major isn't int"  % name)
                 a(isinstance(minor, int), "%s minor isn't int" % name)
                 a(isinstance(micro, int), "%s micro isn't int" % name)
-                a(isinstance(level, str),
+                a(isinstance(level, basestring),
                     "%s level isn't string" % name)
                 a(level in GOOD_SERIALS,
                        "%s level string has unknown value" % name)
@@ -53,14 +53,11 @@ class FutureTest(unittest.TestCase):
 
             a(hasattr(value, "compiler_flag"),
                    "feature is missing a .compiler_flag attr")
-            # Make sure the compile accepts the flag.
-            compile("", "<test>", "exec", value.compiler_flag)
             a(isinstance(getattr(value, "compiler_flag"), int),
                    ".compiler_flag isn't int")
 
-
 def test_main():
-    support.run_unittest(FutureTest)
+    test_support.run_unittest(FutureTest)
 
 if __name__ == "__main__":
     test_main()

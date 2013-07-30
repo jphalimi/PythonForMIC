@@ -27,27 +27,27 @@ class PickleTest(unittest.TestCase):
             c_double(3.14),
             ]:
             dst = self.loads(self.dumps(src))
-            self.assertEqual(src.__dict__, dst.__dict__)
-            self.assertEqual(memoryview(src).tobytes(),
-                                 memoryview(dst).tobytes())
+            self.failUnlessEqual(src.__dict__, dst.__dict__)
+            self.failUnlessEqual(buffer(src)[:],
+                                 buffer(dst)[:])
 
     def test_struct(self):
         X.init_called = 0
 
         x = X()
         x.a = 42
-        self.assertEqual(X.init_called, 1)
+        self.failUnlessEqual(X.init_called, 1)
 
         y = self.loads(self.dumps(x))
 
         # loads must NOT call __init__
-        self.assertEqual(X.init_called, 1)
+        self.failUnlessEqual(X.init_called, 1)
 
         # ctypes instances are identical when the instance __dict__
         # and the memory buffer are identical
-        self.assertEqual(y.__dict__, x.__dict__)
-        self.assertEqual(memoryview(y).tobytes(),
-                             memoryview(x).tobytes())
+        self.failUnlessEqual(y.__dict__, x.__dict__)
+        self.failUnlessEqual(buffer(y)[:],
+                             buffer(x)[:])
 
     def test_unpickable(self):
         # ctypes objects that are pointers or contain pointers are
@@ -67,9 +67,9 @@ class PickleTest(unittest.TestCase):
             self.assertRaises(ValueError, lambda: self.dumps(item))
 
     def test_wchar(self):
-        pickle.dumps(c_char(b"x"))
+        pickle.dumps(c_char("x"))
         # Issue 5049
-        pickle.dumps(c_wchar("x"))
+        pickle.dumps(c_wchar(u"x"))
 
 class PickleTest_1(PickleTest):
     def dumps(self, item):

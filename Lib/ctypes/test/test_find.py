@@ -19,11 +19,11 @@ else:
 ## print, for debugging
 if is_resource_enabled("printing"):
     if lib_gl or lib_glu or lib_gle:
-        print("OpenGL libraries:")
+        print "OpenGL libraries:"
         for item in (("GL", lib_gl),
                      ("GLU", lib_glu),
                      ("gle", lib_gle)):
-            print("\t", item)
+            print "\t", item
 
 
 # On some systems, loading the OpenGL libraries needs the RTLD_GLOBAL mode.
@@ -76,7 +76,7 @@ class Test_OpenGL_libs(unittest.TestCase):
 ##            sqrt = libm.sqrt
 ##            sqrt.argtypes = (c_double,)
 ##            sqrt.restype = c_double
-##            self.assertEqual(sqrt(2), math.sqrt(2))
+##            self.failUnlessEqual(sqrt(2), math.sqrt(2))
 
 if __name__ == "__main__":
     unittest.main()

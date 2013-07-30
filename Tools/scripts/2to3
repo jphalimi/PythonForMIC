@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import sys
 from lib2to3.main import main
+import sys
+import os
 
 sys.exit(main("lib2to3.fixes"))

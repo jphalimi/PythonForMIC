@@ -2,10 +2,9 @@
 
 import os
 import copy
-import pickle
 import tempfile
 import unittest
-from test import support
+from test import test_support
 
 from collections import defaultdict
 
@@ -25,26 +24,26 @@ class TestDefaultDict(unittest.TestCase):
         d1[13]
         d1[14]
         self.assertEqual(d1, {12: [42, 24], 13: [], 14: []})
-        self.assertTrue(d1[12] is not d1[13] is not d1[14])
+        self.assert_(d1[12] is not d1[13] is not d1[14])
         d2 = defaultdict(list, foo=1, bar=2)
         self.assertEqual(d2.default_factory, list)
         self.assertEqual(d2, {"foo": 1, "bar": 2})
         self.assertEqual(d2["foo"], 1)
         self.assertEqual(d2["bar"], 2)
         self.assertEqual(d2[42], [])
-        self.assertIn("foo", d2)
-        self.assertIn("foo", d2.keys())
-        self.assertIn("bar", d2)
-        self.assertIn("bar", d2.keys())
-        self.assertIn(42, d2)
-        self.assertIn(42, d2.keys())
-        self.assertNotIn(12, d2)
-        self.assertNotIn(12, d2.keys())
+        self.assert_("foo" in d2)
+        self.assert_("foo" in d2.keys())
+        self.assert_("bar" in d2)
+        self.assert_("bar" in d2.keys())
+        self.assert_(42 in d2)
+        self.assert_(42 in d2.keys())
+        self.assert_(12 not in d2)
+        self.assert_(12 not in d2.keys())
         d2.default_factory = None
         self.assertEqual(d2.default_factory, None)
         try:
             d2[15]
-        except KeyError as err:
+        except KeyError, err:
             self.assertEqual(err.args, (15,))
         else:
             self.fail("d2[15] didn't raise KeyError")
@@ -66,10 +65,10 @@ class TestDefaultDict(unittest.TestCase):
         d2 = defaultdict(int)
         self.assertEqual(d2.default_factory, int)
         d2[12] = 42
-        self.assertEqual(repr(d2), "defaultdict(<class 'int'>, {12: 42})")
+        self.assertEqual(repr(d2), "defaultdict(<type 'int'>, {12: 42})")
         def foo(): return 43
         d3 = defaultdict(foo)
-        self.assertTrue(d3.default_factory is foo)
+        self.assert_(d3.default_factory is foo)
         d3[13]
         self.assertEqual(repr(d3), "defaultdict(%s, {13: 43})" % repr(foo))
 
@@ -84,8 +83,8 @@ class TestDefaultDict(unittest.TestCase):
         try:
             f = open(tfn, "w+")
             try:
-                print(d1, file=f)
-                print(d2, file=f)
+                print >>f, d1
+                print >>f, d2
                 f.seek(0)
                 self.assertEqual(f.readline(), repr(d1) + "\n")
                 self.assertEqual(f.readline(), repr(d2) + "\n")
@@ -134,7 +133,7 @@ class TestDefaultDict(unittest.TestCase):
         d2 = copy.deepcopy(d1)
         self.assertEqual(d2.default_factory, foobar)
         self.assertEqual(d2, d1)
-        self.assertTrue(d1[1] is not d2[1])
+        self.assert_(d1[1] is not d2[1])
         d1.default_factory = list
         d2 = copy.deepcopy(d1)
         self.assertEqual(d2.default_factory, list)
@@ -144,7 +143,7 @@ class TestDefaultDict(unittest.TestCase):
         d1 = defaultdict()
         try:
             d1[(1,)]
-        except KeyError as err:
+        except KeyError, err:
             self.assertEqual(err.args[0], (1,))
         else:
             self.fail("expected KeyError")
@@ -157,7 +156,7 @@ class TestDefaultDict(unittest.TestCase):
             def _factory(self):
                 return []
         d = sub()
-        self.assertTrue(repr(d).startswith(
+        self.assert_(repr(d).startswith(
             "defaultdict(<bound method sub._factory of defaultdict(..."))
 
         # NOTE: printing a subclass of a builtin type does not call its
@@ -166,22 +165,15 @@ class TestDefaultDict(unittest.TestCase):
         try:
             f = open(tfn, "w+")
             try:
-                print(d, file=f)
+                print >>f, d
             finally:
                 f.close()
         finally:
             os.remove(tfn)
 
-    def test_pickleing(self):
-        d = defaultdict(int)
-        d[1]
-        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
-            s = pickle.dumps(d, proto)
-            o = pickle.loads(s)
-            self.assertEqual(d, o)
 
 def test_main():
-    support.run_unittest(TestDefaultDict)
+    test_support.run_unittest(TestDefaultDict)
 
 if __name__ == "__main__":
     test_main()

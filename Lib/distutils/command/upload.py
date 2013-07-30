@@ -6,20 +6,16 @@ from distutils.errors import *
 from distutils.core import PyPIRCCommand
 from distutils.spawn import spawn
 from distutils import log
-import sys
-import os, io
+from hashlib import md5
+import os
 import socket
 import platform
-import configparser
-import http.client as httpclient
+import httplib
 from base64 import standard_b64encode
-import urllib.parse
+import urlparse
+import cStringIO as StringIO
+from ConfigParser import ConfigParser
 
-# this keeps compatibility for 2.3 and 2.4
-if sys.version < "2.5":
-    from md5 import md5
-else:
-    from hashlib import md5
 
 class upload(PyPIRCCommand):
 
@@ -54,11 +50,6 @@ class upload(PyPIRCCommand):
             self.repository = config['repository']
             self.realm = config['realm']
 
-        # getting the password from the distribution
-        # if previously set by the register command
-        if not self.password and self.distribution.password:
-            self.password = self.distribution.password
-
     def run(self):
         if not self.distribution.dist_files:
             raise DistutilsOptionError("No dist file created in earlier command")
@@ -76,11 +67,7 @@ class upload(PyPIRCCommand):
 
         # Fill in the data - send all the meta-data in case we need to
         # register a new release
-        f = open(filename,'rb')
-        try:
-            content = f.read()
-        finally:
-            f.close()
+        content = open(filename,'rb').read()
         meta = self.distribution.metadata
         data = {
             # action
@@ -128,52 +115,50 @@ class upload(PyPIRCCommand):
                                      open(filename+".asc").read())
 
         # set up the authentication
-        user_pass = (self.username + ":" + self.password).encode('ascii')
-        # The exact encoding of the authentication string is debated.
-        # Anyway PyPI only accepts ascii for both username or password.
-        auth = "Basic " + standard_b64encode(user_pass).decode('ascii')
+        auth = "Basic " + standard_b64encode(self.username + ":" +
+                                             self.password)
 
         # Build up the MIME payload for the POST data
         boundary = '--------------GHSKFJDLGDS7543FJKLFHRE75642756743254'
-        sep_boundary = b'\n--' + boundary.encode('ascii')
-        end_boundary = sep_boundary + b'--'
-        body = io.BytesIO()
+        sep_boundary = '\n--' + boundary
+        end_boundary = sep_boundary + '--'
+        body = StringIO.StringIO()
         for key, value in data.items():
-            title = '\nContent-Disposition: form-data; name="%s"' % key
             # handle multiple entries for the same name
             if type(value) != type([]):
                 value = [value]
             for value in value:
                 if type(value) is tuple:
-                    title += '; filename="%s"' % value[0]
+                    fn = ';filename="%s"' % value[0]
                     value = value[1]
                 else:
-                    value = str(value).encode('utf-8')
+                    fn = ""
+
                 body.write(sep_boundary)
-                body.write(title.encode('utf-8'))
-                body.write(b"\n\n")
+                body.write('\nContent-Disposition: form-data; name="%s"'%key)
+                body.write(fn)
+                body.write("\n\n")
                 body.write(value)
-                if value and value[-1:] == b'\r':
-                    body.write(b'\n')  # write an extra newline (lurve Macs)
+                if value and value[-1] == '\r':
+                    body.write('\n')  # write an extra newline (lurve Macs)
         body.write(end_boundary)
-        body.write(b"\n")
+        body.write("\n")
         body = body.getvalue()
 
         self.announce("Submitting %s to %s" % (filename, self.repository), log.INFO)
 
         # build the Request
-        # We can't use urllib since we need to send the Basic
+        # We can't use urllib2 since we need to send the Basic
         # auth right with the first request
-        # TODO(jhylton): Can we fix urllib?
         schema, netloc, url, params, query, fragments = \
-            urllib.parse.urlparse(self.repository)
+            urlparse.urlparse(self.repository)
         assert not params and not query and not fragments
         if schema == 'http':
-            http = httpclient.HTTPConnection(netloc)
+            http = httplib.HTTPConnection(netloc)
         elif schema == 'https':
-            http = httpclient.HTTPSConnection(netloc)
+            http = httplib.HTTPSConnection(netloc)
         else:
-            raise AssertionError("unsupported schema "+schema)
+            raise AssertionError, "unsupported schema "+schema
 
         data = ''
         loglevel = log.INFO
@@ -186,7 +171,7 @@ class upload(PyPIRCCommand):
             http.putheader('Authorization', auth)
             http.endheaders()
             http.send(body)
-        except socket.error as e:
+        except socket.error, e:
             self.announce(str(e), log.ERROR)
             return
 
@@ -198,5 +183,4 @@ class upload(PyPIRCCommand):
             self.announce('Upload failed (%s): %s' % (r.status, r.reason),
                           log.ERROR)
         if self.show_response:
-            msg = '\n'.join(('-' * 75, r.read(), '-' * 75))
-            self.announce(msg, log.INFO)
+            print '-'*75, r.read(), '-'*75

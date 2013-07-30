@@ -39,7 +39,7 @@ class DumpTests(unittest.TestCase):
         expected_sqls = ['BEGIN TRANSACTION;'] + expected_sqls + \
             ['COMMIT;']
         [self.assertEqual(expected_sqls[i], actual_sqls[i])
-            for i in range(len(expected_sqls))]
+            for i in xrange(len(expected_sqls))]
 
 def suite():
     return unittest.TestSuite(unittest.makeSuite(DumpTests, "Check"))

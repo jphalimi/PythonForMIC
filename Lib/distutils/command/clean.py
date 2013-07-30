@@ -4,12 +4,16 @@ Implements the Distutils 'clean' command."""
 
 # contributed by Bastian Kleineidam <calvin@cs.uni-sb.de>, added 2000-03-18
 
+# This module should be kept compatible with Python 2.1.
+
+__revision__ = "$Id: clean.py 38532 2005-03-03 08:12:27Z loewis $"
+
 import os
 from distutils.core import Command
 from distutils.dir_util import remove_tree
 from distutils import log
 
-class clean(Command):
+class clean (Command):
 
     description = "clean up temporary files from 'build' command"
     user_options = [
@@ -74,3 +78,5 @@ class clean(Command):
                 log.info("removing '%s'", self.build_base)
             except OSError:
                 pass
+
+# class clean

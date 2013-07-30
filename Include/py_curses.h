@@ -80,9 +80,6 @@ typedef struct {
 
 #define PyCursesWindow_Check(v)	 (Py_TYPE(v) == &PyCursesWindow_Type)
 
-#define PyCurses_CAPSULE_NAME "_curses._C_API"
-
-
 #ifdef CURSES_MODULE
 /* This section is used when compiling _cursesmodule.c */
 
@@ -97,8 +94,16 @@ static void **PyCurses_API;
 #define PyCursesInitialisedColor {if (! ((int (*)(void))PyCurses_API[3]) () ) return NULL;}
 
 #define import_curses() \
-    PyCurses_API = (void **)PyCapsule_Import(PyCurses_CAPSULE_NAME, 1);
-
+{ \
+  PyObject *module = PyImport_ImportModuleNoBlock("_curses"); \
+  if (module != NULL) { \
+    PyObject *module_dict = PyModule_GetDict(module); \
+    PyObject *c_api_object = PyDict_GetItemString(module_dict, "_C_API"); \
+    if (PyCObject_Check(c_api_object)) { \
+      PyCurses_API = (void **)PyCObject_AsVoidPtr(c_api_object); \
+    } \
+  } \
+}
 #endif
 
 /* general error messages */
@@ -139,14 +144,14 @@ static PyObject *PyCurses_ ## X (PyObject *self, PyObject *args) \
 static PyObject *PyCurses_ ## X (PyObject *self) \
 { \
  PyCursesInitialised \
- return PyLong_FromLong((long) X()); }
+ return PyInt_FromLong((long) X()); }
 
 
 #define NoArgReturnStringFunction(X) \
 static PyObject *PyCurses_ ## X (PyObject *self) \
 { \
   PyCursesInitialised \
-  return PyBytes_FromString(X()); }
+  return PyString_FromString(X()); }
 
 #define NoArgTrueFalseFunction(X) \
 static PyObject *PyCurses_ ## X (PyObject *self) \

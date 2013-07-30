@@ -6,9 +6,8 @@
 .. moduleauthor:: Marc-Andre Lemburg <mal@egenix.com>
 .. sectionauthor:: Bjorn Pettersen <bpettersen@corp.fairisaac.com>
 
-**Source code:** :source:`Lib/platform.py`
 
---------------
+.. versionadded:: 2.3
 
 .. note::
 
@@ -30,24 +29,14 @@ Cross Platform
    returned as strings.
 
    Values that cannot be determined are returned as given by the parameter presets.
-   If bits is given as ``''``, the :c:func:`sizeof(pointer)` (or
-   :c:func:`sizeof(long)` on Python version < 1.5.2) is used as indicator for the
+   If bits is given as ``''``, the :cfunc:`sizeof(pointer)` (or
+   :cfunc:`sizeof(long)` on Python version < 1.5.2) is used as indicator for the
    supported pointer size.
 
    The function relies on the system's :file:`file` command to do the actual work.
    This is available on most if not all Unix  platforms and some non-Unix platforms
    and then only if the executable points to the Python interpreter.  Reasonable
    defaults are used when the above needs are not met.
-
-   .. note::
-
-      On Mac OS X (and perhaps other platforms), executable files may be
-      universal files containing multiple architectures.
-
-      To get at the "64-bitness" of the current interpreter, it is more
-      reliable to query the :attr:`sys.maxsize` attribute::
-
-         is_64bits = sys.maxsize > 2**32
 
 
 .. function:: machine()
@@ -103,16 +92,22 @@ Cross Platform
 
    Returns a string identifying the Python implementation SCM branch.
 
+   .. versionadded:: 2.6
+
 
 .. function:: python_implementation()
 
    Returns a string identifying the Python implementation. Possible return values
-   are: 'CPython', 'IronPython', 'Jython', 'PyPy'.
+   are: 'CPython', 'IronPython', 'Jython'.
+
+   .. versionadded:: 2.6
 
 
 .. function:: python_revision()
 
    Returns a string identifying the Python implementation SCM revision.
+
+   .. versionadded:: 2.6
 
 
 .. function:: python_version()
@@ -199,7 +194,7 @@ Windows Platform
 
    .. note::
 
-      This function works best with Mark Hammond's
+      Note: this function works best with Mark Hammond's
       :mod:`win32all` package installed, but also on Python 2.3 and
       later (support for this was added in Python 2.6). It obviously
       only runs on Win32 compatible platforms.
@@ -208,7 +203,7 @@ Windows Platform
 Win95/98 specific
 ^^^^^^^^^^^^^^^^^
 
-.. function:: popen(cmd, mode='r', bufsize=-1)
+.. function:: popen(cmd, mode='r', bufsize=None)
 
    Portable :func:`popen` interface.  Find a working popen implementation
    preferring :func:`win32pipe.popen`.  On Windows NT, :func:`win32pipe.popen`
@@ -228,6 +223,9 @@ Mac OS Platform
    Entries which cannot be determined are set to ``''``.  All tuple entries are
    strings.
 
+   Documentation for the underlying :cfunc:`gestalt` API is available online at
+   http://www.rgaros.nl/gestalt/.
+
 
 Unix Platforms
 --------------
@@ -235,7 +233,15 @@ Unix Platforms
 
 .. function:: dist(distname='', version='', id='', supported_dists=('SuSE','debian','redhat','mandrake',...))
 
-   This is another name for :func:`linux_distribution`.
+   This is an old version of the functionality now provided by
+   :func:`linux_distribution`. For new code, please use the
+   :func:`linux_distribution`.
+
+   The only difference between the two is that ``dist()`` always
+   returns the short name of the distribution taken from the
+   ``supported_dists`` parameter.
+
+   .. deprecated:: 2.6
 
 .. function:: linux_distribution(distname='', version='', id='', supported_dists=('SuSE','debian','redhat','mandrake',...), full_distribution_name=1)
 
@@ -252,6 +258,8 @@ Unix Platforms
    Returns a tuple ``(distname,version,id)`` which defaults to the args given as
    parameters.  ``id`` is the item in parentheses after the version number.  It
    is usually the version codename.
+
+   .. versionadded:: 2.6
 
 .. function:: libc_ver(executable=sys.executable, lib='', version='', chunksize=2048)
 

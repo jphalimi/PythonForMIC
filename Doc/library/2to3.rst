@@ -89,7 +89,7 @@ process.
 Since some print statements can be parsed as function calls or statements, 2to3
 cannot always read files containing the print function.  When 2to3 detects the
 presence of the ``from __future__ import print_function`` compiler directive, it
-modifies its internal grammar to interpret :func:`print` as a function.  This
+modifies its internal grammar to interpert :func:`print` as a function.  This
 change can also be enabled manually with the :option:`-p` flag.  Use
 :option:`-p` to run fixers on code that already has had its print statements
 converted.
@@ -141,7 +141,7 @@ and off individually.  They are described here in more detail.
 
 .. 2to3fixer:: exec
 
-   Converts the ``exec`` statement to the :func:`exec` function.
+   Converts the :keyword:`exec` statement to the :func:`exec` function.
 
 .. 2to3fixer:: execfile
 
@@ -267,25 +267,6 @@ and off individually.  They are described here in more detail.
 
    Converts octal literals into the new syntax.
 
-.. 2to3fixer:: operator
-
-   Converts calls to various functions in the :mod:`operator` module to other,
-   but equivalent, function calls.  When needed, the appropriate ``import``
-   statements are added, e.g. ``import collections``.  The following mapping
-   are made:
-
-   ==================================  ==========================================
-   From                                To
-   ==================================  ==========================================
-   ``operator.isCallable(obj)``        ``hasattr(obj, '__call__')``
-   ``operator.sequenceIncludes(obj)``  ``operator.contains(obj)``
-   ``operator.isSequenceType(obj)``    ``isinstance(obj, collections.Sequence)``
-   ``operator.isMappingType(obj)``     ``isinstance(obj, collections.Mapping)``
-   ``operator.isNumberType(obj)``      ``isinstance(obj, numbers.Number)``
-   ``operator.repeat(obj, n)``         ``operator.mul(obj, n)``
-   ``operator.irepeat(obj, n)``        ``operator.imul(obj, n)``
-   ==================================  ==========================================
-
 .. 2to3fixer:: paren
 
    Add extra parenthesis where they are required in list comprehensions.  For
@@ -293,7 +274,7 @@ and off individually.  They are described here in more detail.
 
 .. 2to3fixer:: print
 
-   Converts the ``print`` statement to the :func:`print` function.
+   Converts the :keyword:`print` statement to the :func:`print` function.
 
 .. 2to3fixer:: raise
 

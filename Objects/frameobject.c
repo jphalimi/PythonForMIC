@@ -15,11 +15,14 @@
 #define OFF(x) offsetof(PyFrameObject, x)
 
 static PyMemberDef frame_memberlist[] = {
-    {"f_back",          T_OBJECT,       OFF(f_back),    READONLY},
-    {"f_code",          T_OBJECT,       OFF(f_code),    READONLY},
-    {"f_builtins",      T_OBJECT,       OFF(f_builtins),READONLY},
-    {"f_globals",       T_OBJECT,       OFF(f_globals), READONLY},
-    {"f_lasti",         T_INT,          OFF(f_lasti),   READONLY},
+    {"f_back",          T_OBJECT,       OFF(f_back),    RO},
+    {"f_code",          T_OBJECT,       OFF(f_code),    RO},
+    {"f_builtins",      T_OBJECT,       OFF(f_builtins),RO},
+    {"f_globals",       T_OBJECT,       OFF(f_globals), RO},
+    {"f_lasti",         T_INT,          OFF(f_lasti),   RO},
+    {"f_exc_type",      T_OBJECT,       OFF(f_exc_type)},
+    {"f_exc_value",     T_OBJECT,       OFF(f_exc_value)},
+    {"f_exc_traceback", T_OBJECT,       OFF(f_exc_traceback)},
     {NULL}      /* Sentinel */
 };
 
@@ -31,19 +34,17 @@ frame_getlocals(PyFrameObject *f, void *closure)
     return f->f_locals;
 }
 
-int
-PyFrame_GetLineNumber(PyFrameObject *f)
-{
-    if (f->f_trace)
-        return f->f_lineno;
-    else
-        return PyCode_Addr2Line(f->f_code, f->f_lasti);
-}
-
 static PyObject *
 frame_getlineno(PyFrameObject *f, void *closure)
 {
-    return PyLong_FromLong(PyFrame_GetLineNumber(f));
+    int lineno;
+
+    if (f->f_trace)
+        lineno = f->f_lineno;
+    else
+        lineno = PyCode_Addr2Line(f->f_code, f->f_lasti);
+
+    return PyInt_FromLong(lineno);
 }
 
 /* Setter for f_lineno - you can set f_lineno from within a trace function in
@@ -65,8 +66,6 @@ static int
 frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno)
 {
     int new_lineno = 0;                 /* The new value of f_lineno */
-    long l_new_lineno;
-    int overflow;
     int new_lasti = 0;                  /* The new value of f_lasti */
     int new_iblock = 0;                 /* The new value of f_iblock */
     unsigned char *code = NULL;         /* The bytecode for the frame... */
@@ -87,9 +86,10 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno)
     int in_finally[CO_MAXBLOCKS];       /* (ditto) */
     int blockstack_top = 0;             /* (ditto) */
     unsigned char setup_op = 0;         /* (ditto) */
+    char *tmp;
 
     /* f_lineno must be an integer. */
-    if (!PyLong_CheckExact(p_new_lineno)) {
+    if (!PyInt_Check(p_new_lineno)) {
         PyErr_SetString(PyExc_ValueError,
                         "lineno must be an integer");
         return -1;
@@ -100,53 +100,34 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno)
     if (!f->f_trace)
     {
         PyErr_Format(PyExc_ValueError,
-                     "f_lineno can only be set by a"
-                     " line trace function");
+                     "f_lineno can only be set by a trace function");
         return -1;
     }
 
     /* Fail if the line comes before the start of the code block. */
-    l_new_lineno = PyLong_AsLongAndOverflow(p_new_lineno, &overflow);
-    if (overflow
-#if SIZEOF_LONG > SIZEOF_INT
-        || l_new_lineno > INT_MAX
-        || l_new_lineno < INT_MIN
-#endif
-       ) {
-        PyErr_SetString(PyExc_ValueError,
-                        "lineno out of range");
-        return -1;
-    }
-    new_lineno = (int)l_new_lineno;
-
+    new_lineno = (int) PyInt_AsLong(p_new_lineno);
     if (new_lineno < f->f_code->co_firstlineno) {
         PyErr_Format(PyExc_ValueError,
                      "line %d comes before the current code block",
                      new_lineno);
         return -1;
     }
-    else if (new_lineno == f->f_code->co_firstlineno) {
-        new_lasti = 0;
-        new_lineno = f->f_code->co_firstlineno;
-    }
-    else {
-        /* Find the bytecode offset for the start of the given
-         * line, or the first code-owning line after it. */
-        char *tmp;
-        PyBytes_AsStringAndSize(f->f_code->co_lnotab,
-                                &tmp, &lnotab_len);
-        lnotab = (unsigned char *) tmp;
-        addr = 0;
-        line = f->f_code->co_firstlineno;
-        new_lasti = -1;
-        for (offset = 0; offset < lnotab_len; offset += 2) {
-            addr += lnotab[offset];
-            line += lnotab[offset+1];
-            if (line >= new_lineno) {
-                new_lasti = addr;
-                new_lineno = line;
-                break;
-            }
+
+    /* Find the bytecode offset for the start of the given line, or the
+     * first code-owning line after it. */
+    PyString_AsStringAndSize(f->f_code->co_lnotab,
+                             &tmp, &lnotab_len);
+    lnotab = (unsigned char *) tmp;
+    addr = 0;
+    line = f->f_code->co_firstlineno;
+    new_lasti = -1;
+    for (offset = 0; offset < lnotab_len; offset += 2) {
+        addr += lnotab[offset];
+        line += lnotab[offset+1];
+        if (line >= new_lineno) {
+            new_lasti = addr;
+            new_lineno = line;
+            break;
         }
     }
 
@@ -159,7 +140,7 @@ frame_setlineno(PyFrameObject *f, PyObject* p_new_lineno)
     }
 
     /* We're now ready to look at the bytecode. */
-    PyBytes_AsStringAndSize(f->f_code->co_code, (char **)&code, &code_len);
+    PyString_AsStringAndSize(f->f_code->co_code, (char **)&code, &code_len);
     min_addr = MIN(new_lasti, f->f_lasti);
     max_addr = MAX(new_lasti, f->f_lasti);
 
@@ -347,25 +328,33 @@ frame_gettrace(PyFrameObject *f, void *closure)
 static int
 frame_settrace(PyFrameObject *f, PyObject* v, void *closure)
 {
-    PyObject* old_value;
-
     /* We rely on f_lineno being accurate when f_trace is set. */
-    f->f_lineno = PyFrame_GetLineNumber(f);
 
-    old_value = f->f_trace;
+    PyObject* old_value = f->f_trace;
+
     Py_XINCREF(v);
     f->f_trace = v;
+
+    if (v != NULL)
+        f->f_lineno = PyCode_Addr2Line(f->f_code, f->f_lasti);
+
     Py_XDECREF(old_value);
 
     return 0;
 }
 
+static PyObject *
+frame_getrestricted(PyFrameObject *f, void *closure)
+{
+    return PyBool_FromLong(PyFrame_IsRestricted(f));
+}
 
 static PyGetSetDef frame_getsetlist[] = {
     {"f_locals",        (getter)frame_getlocals, NULL, NULL},
     {"f_lineno",        (getter)frame_getlineno,
                     (setter)frame_setlineno, NULL},
     {"f_trace",         (getter)frame_gettrace, (setter)frame_settrace, NULL},
+    {"f_restricted",(getter)frame_getrestricted,NULL, NULL},
     {0}
 };
 
@@ -391,7 +380,7 @@ static PyGetSetDef frame_getsetlist[] = {
        the local variables in f_localsplus are NULL.
 
    2. We also maintain a separate free list of stack frames (just like
-   floats are allocated in a special way -- see floatobject.c).  When
+   integers are allocated in a special way -- see intobject.c).  When
    a stack frame is on the free list, only the following members have
    a meaning:
     ob_type             == &Frametype
@@ -534,7 +523,7 @@ frame_sizeof(PyFrameObject *f)
     /* subtract one as it is already included in PyFrameObject */
     res = sizeof(PyFrameObject) + (extras-1) * sizeof(PyObject *);
 
-    return PyLong_FromSsize_t(res);
+    return PyInt_FromSsize_t(res);
 }
 
 PyDoc_STRVAR(sizeof__doc__,
@@ -555,7 +544,7 @@ PyTypeObject PyFrame_Type = {
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_reserved */
+    0,                                          /* tp_compare */
     0,                                          /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -585,7 +574,7 @@ static PyObject *builtin_object;
 
 int _PyFrame_Init()
 {
-    builtin_object = PyUnicode_InternFromString("__builtins__");
+    builtin_object = PyString_InternFromString("__builtins__");
     if (builtin_object == NULL)
         return 0;
     return 1;
@@ -767,7 +756,7 @@ map_to_dict(PyObject *map, Py_ssize_t nmap, PyObject *dict, PyObject **values,
     for (j = nmap; --j >= 0; ) {
         PyObject *key = PyTuple_GET_ITEM(map, j);
         PyObject *value = values[j];
-        assert(PyUnicode_Check(key));
+        assert(PyString_Check(key));
         if (deref) {
             assert(PyCell_Check(value));
             value = PyCell_GET(value);
@@ -815,7 +804,7 @@ dict_to_map(PyObject *map, Py_ssize_t nmap, PyObject *dict, PyObject **values,
     for (j = nmap; --j >= 0; ) {
         PyObject *key = PyTuple_GET_ITEM(map, j);
         PyObject *value = PyObject_GetItem(dict, key);
-        assert(PyUnicode_Check(key));
+        assert(PyString_Check(key));
         /* We only care about NULLs if clear is true. */
         if (value == NULL) {
             PyErr_Clear();

@@ -132,9 +132,6 @@ typedef struct {
 #define MBENC_FLUSH             0x0001 /* encode all characters encodable */
 #define MBENC_MAX               MBENC_FLUSH
 
-#define PyMultibyteCodec_CAPSULE_NAME "multibytecodec.__map_*"
-
-
 #ifdef __cplusplus
 }
 #endif

@@ -3,12 +3,6 @@
 
 #include "pyconfig.h" /* include for defines */
 
-/* Some versions of HP-UX & Solaris need inttypes.h for int32_t,
-   INT32_MAX, etc. */
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
-
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -41,6 +35,17 @@ Used in:  PY_LONG_LONG
 
 **************************************************************************/
 
+
+/* For backward compatibility only. Obsolete, do not use. */
+#ifdef HAVE_PROTOTYPES
+#define Py_PROTO(x) x
+#else
+#define Py_PROTO(x) ()
+#endif
+#ifndef Py_FPROTO
+#define Py_FPROTO(x) Py_PROTO(x)
+#endif
+
 /* typedefs for some C9X-defined synonyms for integral types.
  *
  * The names in Python are exactly the same as the C9X names, except with a
@@ -62,88 +67,18 @@ Used in:  PY_LONG_LONG
 #define PY_LLONG_MAX LLONG_MAX
 #define PY_ULLONG_MAX ULLONG_MAX
 #elif defined(__LONG_LONG_MAX__)
-/* Otherwise, if GCC has a builtin define, use that.  (Definition of
- * PY_LLONG_MIN assumes two's complement with no trap representation.) */
+/* Otherwise, if GCC has a builtin define, use that. */
 #define PY_LLONG_MAX __LONG_LONG_MAX__
-#define PY_LLONG_MIN (-PY_LLONG_MAX - 1)
-#define PY_ULLONG_MAX (PY_LLONG_MAX * Py_ULL(2) + 1)
-#elif defined(SIZEOF_LONG_LONG)
-/* Otherwise compute from SIZEOF_LONG_LONG, assuming two's complement, no
-   padding bits, and no trap representation.  Note: PY_ULLONG_MAX was
-   previously #defined as (~0ULL) here; but that'll give the wrong value in a
-   preprocessor expression on systems where long long != intmax_t. */
-#define PY_LLONG_MAX                                                    \
-    (1 + 2 * ((Py_LL(1) << (CHAR_BIT * SIZEOF_LONG_LONG - 2)) - 1))
-#define PY_LLONG_MIN (-PY_LLONG_MAX - 1)
-#define PY_ULLONG_MAX (PY_LLONG_MAX * Py_ULL(2) + 1)
+#define PY_LLONG_MIN (-PY_LLONG_MAX-1)
+#define PY_ULLONG_MAX (__LONG_LONG_MAX__*2ULL + 1ULL)
+#else
+/* Otherwise, rely on two's complement. */
+#define PY_ULLONG_MAX (~0ULL)
+#define PY_LLONG_MAX  ((long long)(PY_ULLONG_MAX>>1))
+#define PY_LLONG_MIN (-PY_LLONG_MAX-1)
 #endif /* LLONG_MAX */
 #endif
 #endif /* HAVE_LONG_LONG */
-
-/* a build with 30-bit digits for Python long integers needs an exact-width
- * 32-bit unsigned integer type to store those digits.  (We could just use
- * type 'unsigned long', but that would be wasteful on a system where longs
- * are 64-bits.)  On Unix systems, the autoconf macro AC_TYPE_UINT32_T defines
- * uint32_t to be such a type unless stdint.h or inttypes.h defines uint32_t.
- * However, it doesn't set HAVE_UINT32_T, so we do that here.
- */
-#if (defined UINT32_MAX || defined uint32_t)
-#ifndef PY_UINT32_T
-#define HAVE_UINT32_T 1
-#define PY_UINT32_T uint32_t
-#endif
-#endif
-
-/* Macros for a 64-bit unsigned integer type; used for type 'twodigits' in the
- * long integer implementation, when 30-bit digits are enabled.
- */
-#if (defined UINT64_MAX || defined uint64_t)
-#ifndef PY_UINT64_T
-#define HAVE_UINT64_T 1
-#define PY_UINT64_T uint64_t
-#endif
-#endif
-
-/* Signed variants of the above */
-#if (defined INT32_MAX || defined int32_t)
-#ifndef PY_INT32_T
-#define HAVE_INT32_T 1
-#define PY_INT32_T int32_t
-#endif
-#endif
-#if (defined INT64_MAX || defined int64_t)
-#ifndef PY_INT64_T
-#define HAVE_INT64_T 1
-#define PY_INT64_T int64_t
-#endif
-#endif
-
-/* If PYLONG_BITS_IN_DIGIT is not defined then we'll use 30-bit digits if all
-   the necessary integer types are available, and we're on a 64-bit platform
-   (as determined by SIZEOF_VOID_P); otherwise we use 15-bit digits. */
-
-#ifndef PYLONG_BITS_IN_DIGIT
-#if (defined HAVE_UINT64_T && defined HAVE_INT64_T && \
-     defined HAVE_UINT32_T && defined HAVE_INT32_T && SIZEOF_VOID_P >= 8)
-#define PYLONG_BITS_IN_DIGIT 30
-#else
-#define PYLONG_BITS_IN_DIGIT 15
-#endif
-#endif
-
-/* Parameters used for the numeric hash implementation.  See notes for
-   _PyHash_Double in Objects/object.c.  Numeric hashes are based on
-   reduction modulo the prime 2**_PyHASH_BITS - 1. */
-
-#if SIZEOF_VOID_P >= 8
-#define _PyHASH_BITS 61
-#else
-#define _PyHASH_BITS 31
-#endif
-#define _PyHASH_MODULUS (((size_t)1 << _PyHASH_BITS) - 1)
-#define _PyHASH_INF 314159
-#define _PyHASH_NAN 0
-#define _PyHASH_IMAG 1000003UL
 
 /* uintptr_t is the C9X name for an unsigned integral type such that a
  * legitimate void* can be cast to uintptr_t and then back to void* again
@@ -182,11 +117,6 @@ typedef Py_intptr_t     Py_ssize_t;
 #   error "Python needs a typedef for Py_ssize_t in pyport.h."
 #endif
 
-/* Py_hash_t is the same size as a pointer. */
-typedef Py_ssize_t Py_hash_t;
-/* Py_uhash_t is the unsigned equivalent needed to calculate numeric hash. */
-typedef size_t Py_uhash_t;
-
 /* Largest possible value of size_t.
    SIZE_MAX is part of C99, so it might be defined on some
    platforms. If it is not defined, (size_t)-1 is a portable
@@ -216,10 +146,9 @@ typedef size_t Py_uhash_t;
  * all platforms (Python interprets the format string itself, and does whatever
  * the platform C requires to convert a size_t/Py_ssize_t argument):
  *
- *     PyBytes_FromFormat
+ *     PyString_FromFormat
  *     PyErr_Format
- *     PyBytes_FromFormatV
- *     PyUnicode_FromFormatV
+ *     PyString_FromFormatV
  *
  * Lower-level uses require that you interpolate the correct format modifier
  * yourself (e.g., calling printf, fprintf, sprintf, PyOS_snprintf); for
@@ -243,22 +172,6 @@ typedef size_t Py_uhash_t;
 #   endif
 #endif
 
-/* PY_FORMAT_LONG_LONG is analogous to PY_FORMAT_SIZE_T above, but for
- * the long long type instead of the size_t type.  It's only available
- * when HAVE_LONG_LONG is defined. The "high level" Python format
- * functions listed above will interpret "lld" or "llu" correctly on
- * all platforms.
- */
-#ifdef HAVE_LONG_LONG
-#   ifndef PY_FORMAT_LONG_LONG
-#       if defined(MS_WIN64) || defined(MS_WINDOWS)
-#           define PY_FORMAT_LONG_LONG "I64"
-#       else
-#           error "This platform's pyconfig.h needs to define PY_FORMAT_LONG_LONG"
-#       endif
-#   endif
-#endif
-
 /* Py_LOCAL can be used instead of static to get the fastest possible calling
  * convention for functions that are local to a given module.
  *
@@ -275,6 +188,8 @@ typedef size_t Py_uhash_t;
  * module; functions that are exported via method tables, callbacks, etc,
  * should keep using static.
  */
+
+#undef USE_INLINE /* XXX - set via configure? */
 
 #if defined(_MSC_VER)
 #if defined(PY_LOCAL_AGGRESSIVE)
@@ -317,10 +232,6 @@ typedef size_t Py_uhash_t;
 
 #include <stdlib.h>
 
-#ifdef HAVE_IEEEFP_H
-#include <ieeefp.h>  /* needed for 'finite' declaration on some platforms */
-#endif
-
 #include <math.h> /* Moved here from the math section, before extern "C" */
 
 /********************************************
@@ -346,7 +257,9 @@ typedef size_t Py_uhash_t;
 /* NB caller must include <sys/types.h> */
 
 #ifdef HAVE_SYS_SELECT_H
+
 #include <sys/select.h>
+
 #endif /* !HAVE_SYS_SELECT_H */
 
 /*******************************
@@ -373,6 +286,11 @@ typedef size_t Py_uhash_t;
 
 #ifndef DONT_HAVE_FSTAT
 #define HAVE_FSTAT
+#endif
+
+#ifdef RISCOS
+#include <sys/types.h>
+#include "unixstuff.h"
 #endif
 
 #ifdef HAVE_SYS_STAT_H
@@ -409,23 +327,19 @@ extern "C" {
  * C doesn't define whether a right-shift of a signed integer sign-extends
  * or zero-fills.  Here a macro to force sign extension:
  * Py_ARITHMETIC_RIGHT_SHIFT(TYPE, I, J)
- *    Return I >> J, forcing sign extension.  Arithmetically, return the
- *    floor of I/2**J.
+ *    Return I >> J, forcing sign extension.
  * Requirements:
- *    I should have signed integer type.  In the terminology of C99, this can
- *    be either one of the five standard signed integer types (signed char,
- *    short, int, long, long long) or an extended signed integer type.
- *    J is an integer >= 0 and strictly less than the number of bits in the
- *    type of I (because C doesn't define what happens for J outside that
- *    range either).
- *    TYPE used to specify the type of I, but is now ignored.  It's been left
- *    in for backwards compatibility with versions <= 2.6 or 3.0.
+ *    I is of basic signed type TYPE (char, short, int, long, or long long).
+ *    TYPE is one of char, short, int, long, or long long, although long long
+ *    must not be used except on platforms that support it.
+ *    J is an integer >= 0 and strictly less than the number of bits in TYPE
+ *    (because C doesn't define what happens for J outside that range either).
  * Caution:
  *    I may be evaluated more than once.
  */
 #ifdef SIGNED_RIGHT_SHIFT_ZERO_FILLS
 #define Py_ARITHMETIC_RIGHT_SHIFT(TYPE, I, J) \
-    ((I) < 0 ? -1-((-1-(I)) >> (J)) : (I) >> (J))
+    ((I) < 0 ? ~((~(unsigned TYPE)(I)) >> (J)) : (I) >> (J))
 #else
 #define Py_ARITHMETIC_RIGHT_SHIFT(TYPE, I, J) ((I) >> (J))
 #endif
@@ -513,80 +427,6 @@ extern "C" {
             errno = 0;                                                  \
     } while(0)
 
-/*  The functions _Py_dg_strtod and _Py_dg_dtoa in Python/dtoa.c (which are
- *  required to support the short float repr introduced in Python 3.1) require
- *  that the floating-point unit that's being used for arithmetic operations
- *  on C doubles is set to use 53-bit precision.  It also requires that the
- *  FPU rounding mode is round-half-to-even, but that's less often an issue.
- *
- *  If your FPU isn't already set to 53-bit precision/round-half-to-even, and
- *  you want to make use of _Py_dg_strtod and _Py_dg_dtoa, then you should
- *
- *     #define HAVE_PY_SET_53BIT_PRECISION 1
- *
- *  and also give appropriate definitions for the following three macros:
- *
- *    _PY_SET_53BIT_PRECISION_START : store original FPU settings, and
- *        set FPU to 53-bit precision/round-half-to-even
- *    _PY_SET_53BIT_PRECISION_END : restore original FPU settings
- *    _PY_SET_53BIT_PRECISION_HEADER : any variable declarations needed to
- *        use the two macros above.
- *
- * The macros are designed to be used within a single C function: see
- * Python/pystrtod.c for an example of their use.
- */
-
-/* get and set x87 control word for gcc/x86 */
-#ifdef HAVE_GCC_ASM_FOR_X87
-#define HAVE_PY_SET_53BIT_PRECISION 1
-/* _Py_get/set_387controlword functions are defined in Python/pymath.c */
-#define _Py_SET_53BIT_PRECISION_HEADER                          \
-    unsigned short old_387controlword, new_387controlword
-#define _Py_SET_53BIT_PRECISION_START                                   \
-    do {                                                                \
-        old_387controlword = _Py_get_387controlword();                  \
-        new_387controlword = (old_387controlword & ~0x0f00) | 0x0200; \
-        if (new_387controlword != old_387controlword)                   \
-            _Py_set_387controlword(new_387controlword);                 \
-    } while (0)
-#define _Py_SET_53BIT_PRECISION_END                             \
-    if (new_387controlword != old_387controlword)               \
-        _Py_set_387controlword(old_387controlword)
-#endif
-
-/* default definitions are empty */
-#ifndef HAVE_PY_SET_53BIT_PRECISION
-#define _Py_SET_53BIT_PRECISION_HEADER
-#define _Py_SET_53BIT_PRECISION_START
-#define _Py_SET_53BIT_PRECISION_END
-#endif
-
-/* If we can't guarantee 53-bit precision, don't use the code
-   in Python/dtoa.c, but fall back to standard code.  This
-   means that repr of a float will be long (17 sig digits).
-
-   Realistically, there are two things that could go wrong:
-
-   (1) doubles aren't IEEE 754 doubles, or
-   (2) we're on x86 with the rounding precision set to 64-bits
-       (extended precision), and we don't know how to change
-       the rounding precision.
- */
-
-#if !defined(DOUBLE_IS_LITTLE_ENDIAN_IEEE754) && \
-    !defined(DOUBLE_IS_BIG_ENDIAN_IEEE754) && \
-    !defined(DOUBLE_IS_ARM_MIXED_ENDIAN_IEEE754)
-#define PY_NO_SHORT_FLOAT_REPR
-#endif
-
-/* double rounding is symptomatic of use of extended precision on x86.  If
-   we're seeing double rounding, and we don't have any mechanism available for
-   changing the FPU rounding precision, then don't use Python/dtoa.c. */
-#if defined(X87_DOUBLE_ROUNDING) && !defined(HAVE_PY_SET_53BIT_PRECISION)
-#define PY_NO_SHORT_FLOAT_REPR
-#endif
-
-
 /* Py_DEPRECATED(version)
  * Declare a variable, type, or function deprecated.
  * Usage:
@@ -614,6 +454,12 @@ in platform-specific #ifdefs.
 extern int gethostname(char *, int);
 #endif
 
+#ifdef __BEOS__
+/* Unchecked */
+/* It's in the libs, but not the headers... - [cjh] */
+int shutdown( int, int );
+#endif
+
 #ifdef HAVE__GETPTY
 #include <sys/types.h>          /* we need to import mode_t */
 extern char * _getpty(int *, int, mode_t, int);
@@ -635,6 +481,25 @@ extern int openpty(int *, int *, char *, struct termios *, struct winsize *);
 extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 #endif /* !defined(HAVE_PTY_H) && !defined(HAVE_LIBUTIL_H) */
 #endif /* defined(HAVE_OPENPTY) || defined(HAVE_FORKPTY) */
+
+
+/* These are pulled from various places. It isn't obvious on what platforms
+   they are necessary, nor what the exact prototype should look like (which
+   is likely to vary between platforms!) If you find you need one of these
+   declarations, please move them to a platform-specific block and include
+   proper prototypes. */
+#if 0
+
+/* From Modules/resource.c */
+extern int getrusage();
+extern int getpagesize();
+
+/* From Python/sysmodule.c and Modules/posixmodule.c */
+extern int fclose(FILE *);
+
+/* From Modules/posixmodule.c */
+extern int fdatasync(int);
+#endif /* 0 */
 
 
 /* On 4.4BSD-descendants, ctype functions serves the whole range of
@@ -692,10 +557,10 @@ extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 /*
   All windows ports, except cygwin, are handled in PC/pyconfig.h.
 
-  Cygwin is the only other autoconf platform requiring special
-  linkage handling and it uses __declspec().
+  BeOS and cygwin are the only other autoconf platform requiring special
+  linkage handling and both of these use __declspec().
 */
-#if defined(__CYGWIN__)
+#if defined(__CYGWIN__) || defined(__BEOS__)
 #       define HAVE_DECLSPEC_DLL
 #endif
 
@@ -705,28 +570,27 @@ extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 #               ifdef Py_BUILD_CORE
 #                       define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
 #                       define PyAPI_DATA(RTYPE) extern __declspec(dllexport) RTYPE
-        /* module init functions inside the core need no external linkage */
-        /* except for Cygwin to handle embedding */
+            /* module init functions inside the core need no external linkage */
+            /* except for Cygwin to handle embedding (FIXME: BeOS too?) */
 #                       if defined(__CYGWIN__)
-#                               define PyMODINIT_FUNC __declspec(dllexport) PyObject*
+#                               define PyMODINIT_FUNC __declspec(dllexport) void
 #                       else /* __CYGWIN__ */
-#                               define PyMODINIT_FUNC PyObject*
+#                               define PyMODINIT_FUNC void
 #                       endif /* __CYGWIN__ */
 #               else /* Py_BUILD_CORE */
-        /* Building an extension module, or an embedded situation */
-        /* public Python functions and data are imported */
-        /* Under Cygwin, auto-import functions to prevent compilation */
-        /* failures similar to those described at the bottom of 4.1: */
-        /* http://docs.python.org/extending/windows.html#a-cookbook-approach */
+            /* Building an extension module, or an embedded situation */
+            /* public Python functions and data are imported */
+            /* Under Cygwin, auto-import functions to prevent compilation */
+            /* failures similar to http://python.org/doc/FAQ.html#3.24 */
 #                       if !defined(__CYGWIN__)
 #                               define PyAPI_FUNC(RTYPE) __declspec(dllimport) RTYPE
 #                       endif /* !__CYGWIN__ */
 #                       define PyAPI_DATA(RTYPE) extern __declspec(dllimport) RTYPE
-        /* module init functions outside the core must be exported */
+            /* module init functions outside the core must be exported */
 #                       if defined(__cplusplus)
-#                               define PyMODINIT_FUNC extern "C" __declspec(dllexport) PyObject*
+#                               define PyMODINIT_FUNC extern "C" __declspec(dllexport) void
 #                       else /* __cplusplus */
-#                               define PyMODINIT_FUNC __declspec(dllexport) PyObject*
+#                               define PyMODINIT_FUNC __declspec(dllexport) void
 #                       endif /* __cplusplus */
 #               endif /* Py_BUILD_CORE */
 #       endif /* HAVE_DECLSPEC */
@@ -741,11 +605,61 @@ extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 #endif
 #ifndef PyMODINIT_FUNC
 #       if defined(__cplusplus)
-#               define PyMODINIT_FUNC extern "C" PyObject*
+#               define PyMODINIT_FUNC extern "C" void
 #       else /* __cplusplus */
-#               define PyMODINIT_FUNC PyObject*
+#               define PyMODINIT_FUNC void
 #       endif /* __cplusplus */
 #endif
+
+/* Deprecated DL_IMPORT and DL_EXPORT macros */
+#if defined(Py_ENABLE_SHARED) && defined (HAVE_DECLSPEC_DLL)
+#       if defined(Py_BUILD_CORE)
+#               define DL_IMPORT(RTYPE) __declspec(dllexport) RTYPE
+#               define DL_EXPORT(RTYPE) __declspec(dllexport) RTYPE
+#       else
+#               define DL_IMPORT(RTYPE) __declspec(dllimport) RTYPE
+#               define DL_EXPORT(RTYPE) __declspec(dllexport) RTYPE
+#       endif
+#endif
+#ifndef DL_EXPORT
+#       define DL_EXPORT(RTYPE) RTYPE
+#endif
+#ifndef DL_IMPORT
+#       define DL_IMPORT(RTYPE) RTYPE
+#endif
+/* End of deprecated DL_* macros */
+
+/* If the fd manipulation macros aren't defined,
+   here is a set that should do the job */
+
+#if 0 /* disabled and probably obsolete */
+
+#ifndef FD_SETSIZE
+#define FD_SETSIZE      256
+#endif
+
+#ifndef FD_SET
+
+typedef long fd_mask;
+
+#define NFDBITS (sizeof(fd_mask) * NBBY)        /* bits per mask */
+#ifndef howmany
+#define howmany(x, y)   (((x)+((y)-1))/(y))
+#endif /* howmany */
+
+typedef struct fd_set {
+    fd_mask     fds_bits[howmany(FD_SETSIZE, NFDBITS)];
+} fd_set;
+
+#define FD_SET(n, p)    ((p)->fds_bits[(n)/NFDBITS] |= (1 << ((n) % NFDBITS)))
+#define FD_CLR(n, p)    ((p)->fds_bits[(n)/NFDBITS] &= ~(1 << ((n) % NFDBITS)))
+#define FD_ISSET(n, p)  ((p)->fds_bits[(n)/NFDBITS] & (1 << ((n) % NFDBITS)))
+#define FD_ZERO(p)      memset((char *)(p), '\0', sizeof(*(p)))
+
+#endif /* FD_SET */
+
+#endif /* fd manipulation macros */
+
 
 /* limits.h constants that may be missing */
 
@@ -788,7 +702,8 @@ extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
  * Hide GCC attributes from compilers that don't support them.
  */
 #if (!defined(__GNUC__) || __GNUC__ < 2 || \
-     (__GNUC__ == 2 && __GNUC_MINOR__ < 7) )
+     (__GNUC__ == 2 && __GNUC_MINOR__ < 7) ) && \
+    !defined(RISCOS)
 #define Py_GCC_ATTRIBUTE(x)
 #else
 #define Py_GCC_ATTRIBUTE(x) __attribute__(x)
@@ -829,16 +744,6 @@ extern pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 
 #ifndef Py_ULL
 #define Py_ULL(x) Py_LL(x##U)
-#endif
-
-#ifdef VA_LIST_IS_ARRAY
-#define Py_VA_COPY(x, y) Py_MEMCPY((x), (y), sizeof(va_list))
-#else
-#ifdef __va_copy
-#define Py_VA_COPY __va_copy
-#else
-#define Py_VA_COPY(x, y) (x) = (y)
-#endif
 #endif
 
 #endif /* Py_PYPORT_H */

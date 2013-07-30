@@ -32,7 +32,7 @@ class PatternSyntaxError(Exception):
 def tokenize_wrapper(input):
     """Tokenizes a string suppressing significant whitespace."""
     skip = set((token.NEWLINE, token.INDENT, token.DEDENT))
-    tokens = tokenize.generate_tokens(driver.generate_lines(input).__next__)
+    tokens = tokenize.generate_tokens(driver.generate_lines(input).next)
     for quintuple in tokens:
         type, value, start, end, line_text = quintuple
         if type not in skip:
@@ -52,17 +52,14 @@ class PatternCompiler(object):
         self.pysyms = pygram.python_symbols
         self.driver = driver.Driver(self.grammar, convert=pattern_convert)
 
-    def compile_pattern(self, input, debug=False, with_tree=False):
+    def compile_pattern(self, input, debug=False):
         """Compiles a pattern string to a nested pytree.*Pattern object."""
         tokens = tokenize_wrapper(input)
         try:
             root = self.driver.parse_tokens(tokens, debug=debug)
-        except parse.ParseError as e:
+        except parse.ParseError, e:
             raise PatternSyntaxError(str(e))
-        if with_tree:
-            return self.compile_node(root), root
-        else:
-            return self.compile_node(root)
+        return self.compile_node(root)
 
     def compile_node(self, node):
         """Compiles a node, recursively.
@@ -140,7 +137,7 @@ class PatternCompiler(object):
         assert len(nodes) >= 1
         node = nodes[0]
         if node.type == token.STRING:
-            value = str(literals.evalString(node.value))
+            value = unicode(literals.evalString(node.value))
             return pytree.LeafPattern(_type_of_literal(value), value)
         elif node.type == token.NAME:
             value = node.value

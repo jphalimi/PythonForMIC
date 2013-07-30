@@ -6,20 +6,16 @@
 .. sectionauthor:: Moshe Zadka <moshez@zadka.site.co.il>
 .. Documentations stolen from comments in file.
 
-**Source code:** :source:`Lib/wave.py`
-
---------------
-
 The :mod:`wave` module provides a convenient interface to the WAV sound format.
 It does not support compression/decompression, but it does support mono/stereo.
 
 The :mod:`wave` module defines the following function and exception:
 
 
-.. function:: open(file, mode=None)
+.. function:: open(file[, mode])
 
-   If *file* is a string, open the file by that name, otherwise treat it as a
-   seekable file-like object.  *mode* can be any of
+   If *file* is a string, open the file by that name, other treat it as a seekable
+   file-like object. *mode* can be any of
 
    ``'r'``, ``'rb'``
       Read only mode.
@@ -30,14 +26,9 @@ The :mod:`wave` module defines the following function and exception:
    Note that it does not allow read/write WAV files.
 
    A *mode* of ``'r'`` or ``'rb'`` returns a :class:`Wave_read` object, while a
-   *mode* of ``'w'`` or ``'wb'`` returns a :class:`Wave_write` object.  If
-   *mode* is omitted and a file-like object is passed as *file*, ``file.mode``
-   is used as the default value for *mode* (the ``'b'`` flag is still added if
-   necessary).
-
-   If you pass in a file-like object, the wave object will not close it when its
-   :meth:`close` method is called; it is the caller's responsibility to close
-   the file object.
+   *mode* of ``'w'`` or ``'wb'`` returns a :class:`Wave_write` object.  If *mode*
+   is omitted and a file-like  object is passed as *file*, ``file.mode`` is used as
+   the default value for *mode* (the ``'b'`` flag is still added if  necessary).
 
 
 .. function:: openfp(file, mode)
@@ -61,8 +52,8 @@ Wave_read objects, as returned by :func:`.open`, have the following methods:
 
 .. method:: Wave_read.close()
 
-   Close the stream if it was opened by :mod:`wave`, and make the instance
-   unusable.  This is called automatically on object collection.
+   Close the stream, and make the instance unusable. This is called automatically
+   on object collection.
 
 
 .. method:: Wave_read.getnchannels()
@@ -148,8 +139,8 @@ Wave_write objects, as returned by :func:`.open`, have the following methods:
 
 .. method:: Wave_write.close()
 
-   Make sure *nframes* is correct, and close the file if it was opened by
-   :mod:`wave`.  This method is called upon object collection.
+   Make sure *nframes* is correct, and close the file. This method is called upon
+   deletion.
 
 
 .. method:: Wave_write.setnchannels(n)
@@ -165,10 +156,6 @@ Wave_write objects, as returned by :func:`.open`, have the following methods:
 .. method:: Wave_write.setframerate(n)
 
    Set the frame rate to *n*.
-
-   .. versionchanged:: 3.2
-      A non-integral input to this method is rounded to the nearest
-      integer.
 
 
 .. method:: Wave_write.setnframes(n)
@@ -204,7 +191,6 @@ Wave_write objects, as returned by :func:`.open`, have the following methods:
 .. method:: Wave_write.writeframes(data)
 
    Write audio frames and make sure *nframes* is correct.
-
 
 Note that it is invalid to set any parameters after calling :meth:`writeframes`
 or :meth:`writeframesraw`, and any attempt to do so will raise

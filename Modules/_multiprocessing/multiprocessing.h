@@ -3,12 +3,6 @@
 
 #define PY_SSIZE_T_CLEAN
 
-#ifdef __sun
-/* The control message API is only available on Solaris 
-   if XPG 4.2 or later is requested. */
-#define _XOPEN_SOURCE 500
-#endif
-
 #include "Python.h"
 #include "structmember.h"
 #include "pythread.h"
@@ -21,7 +15,7 @@
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #  include <winsock2.h>
-#  include <process.h>               /* getpid() */
+#  include <process.h>		     /* getpid() */
 #  ifdef Py_DEBUG
 #    include <crtdbg.h>
 #  endif
@@ -33,7 +27,7 @@
 #  include <sys/socket.h>
 #  include <sys/uio.h>
 #  include <arpa/inet.h>             /* htonl() and ntohl() */
-#  if defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED)
+#  if HAVE_SEM_OPEN
 #    include <semaphore.h>
      typedef sem_t *SEM_HANDLE;
 #  endif
@@ -51,17 +45,12 @@
  * Issue 3110 - Solaris does not define SEM_VALUE_MAX
  */
 #ifndef SEM_VALUE_MAX
-    #if defined(HAVE_SYSCONF) && defined(_SC_SEM_VALUE_MAX)
-        # define SEM_VALUE_MAX sysconf(_SC_SEM_VALUE_MAX)
-    #elif defined(_SEM_VALUE_MAX)
-        # define SEM_VALUE_MAX _SEM_VALUE_MAX
-    #elif defined(_POSIX_SEM_VALUE_MAX)
-        # define SEM_VALUE_MAX _POSIX_SEM_VALUE_MAX
-    #else
-        # define SEM_VALUE_MAX INT_MAX
-    #endif
+#  ifdef _SEM_VALUE_MAX
+#    define SEM_VALUE_MAX _SEM_VALUE_MAX
+#  else
+#    define SEM_VALUE_MAX INT_MAX
+#  endif
 #endif
-
 
 /*
  * Make sure Py_ssize_t available
@@ -168,11 +157,11 @@ extern HANDLE sigint_event;
 #define CONNECTION_BUFFER_SIZE 1024
 
 typedef struct {
-    PyObject_HEAD
-    HANDLE handle;
-    int flags;
-    PyObject *weakreflist;
-    char buffer[CONNECTION_BUFFER_SIZE];
+	PyObject_HEAD
+	HANDLE handle;
+	int flags;
+	PyObject *weakreflist;
+	char buffer[CONNECTION_BUFFER_SIZE];
 } ConnectionObject;
 
 /*

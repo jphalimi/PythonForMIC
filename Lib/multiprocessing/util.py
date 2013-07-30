@@ -3,33 +3,7 @@
 #
 # multiprocessing/util.py
 #
-# Copyright (c) 2006-2008, R Oudkerk
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-# 3. Neither the name of author nor the names of any contributors may be
-#    used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-# SUCH DAMAGE.
+# Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
 #
 
 import itertools
@@ -153,11 +127,11 @@ def _run_after_forkers():
     for (index, ident, func), obj in items:
         try:
             func(obj)
-        except Exception as e:
+        except Exception, e:
             info('after forker raised exception %s', e)
 
 def register_after_fork(obj, func):
-    _afterfork_registry[(next(_afterfork_counter), id(obj), func)] = obj
+    _afterfork_registry[(_afterfork_counter.next(), id(obj), func)] = obj
 
 #
 # Finalization using weakrefs
@@ -182,7 +156,7 @@ class Finalize(object):
         self._callback = callback
         self._args = args
         self._kwargs = kwargs or {}
-        self._key = (exitpriority, next(_finalizer_counter))
+        self._key = (exitpriority, _finalizer_counter.next())
 
         _finalizer_registry[self._key] = self
 
@@ -252,7 +226,7 @@ def _run_finalizers(minpriority=None):
     else:
         f = lambda p : p[0][0] is not None and p[0][0] >= minpriority
 
-    items = [x for x in list(_finalizer_registry.items()) if f(x)]
+    items = [x for x in _finalizer_registry.items() if f(x)]
     items.sort(reverse=True)
 
     for key, finalizer in items:

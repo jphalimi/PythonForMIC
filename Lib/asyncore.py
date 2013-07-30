@@ -50,15 +50,10 @@ import select
 import socket
 import sys
 import time
-import warnings
 
 import os
-from errno import EALREADY, EINPROGRESS, EWOULDBLOCK, ECONNRESET, EINVAL, \
-     ENOTCONN, ESHUTDOWN, EINTR, EISCONN, EBADF, ECONNABORTED, EPIPE, EAGAIN, \
-     errorcode
-
-_DISCONNECTED = frozenset((ECONNRESET, ENOTCONN, ESHUTDOWN, ECONNABORTED, EPIPE,
-                           EBADF))
+from errno import EALREADY, EINPROGRESS, EWOULDBLOCK, ECONNRESET, \
+     ENOTCONN, ESHUTDOWN, EINTR, EISCONN, EBADF, ECONNABORTED, errorcode
 
 try:
     socket_map
@@ -112,8 +107,9 @@ def readwrite(obj, flags):
             obj.handle_expt_event()
         if flags & (select.POLLHUP | select.POLLERR | select.POLLNVAL):
             obj.handle_close()
-    except socket.error as e:
-        if e.args[0] not in _DISCONNECTED:
+    except socket.error, e:
+        if e.args[0] not in (EBADF, ECONNRESET, ENOTCONN, ESHUTDOWN,
+ECONNABORTED):
             obj.handle_error()
         else:
             obj.handle_close()
@@ -127,13 +123,12 @@ def poll(timeout=0.0, map=None):
         map = socket_map
     if map:
         r = []; w = []; e = []
-        for fd, obj in list(map.items()):
+        for fd, obj in map.items():
             is_r = obj.readable()
             is_w = obj.writable()
             if is_r:
                 r.append(fd)
-            # accepting sockets should not be writable
-            if is_w and not obj.accepting:
+            if is_w:
                 w.append(fd)
             if is_r or is_w:
                 e.append(fd)
@@ -143,7 +138,7 @@ def poll(timeout=0.0, map=None):
 
         try:
             r, w, e = select.select(r, w, e, timeout)
-        except select.error as err:
+        except select.error, err:
             if err.args[0] != EINTR:
                 raise
             else:
@@ -176,12 +171,11 @@ def poll2(timeout=0.0, map=None):
         timeout = int(timeout*1000)
     pollster = select.poll()
     if map:
-        for fd, obj in list(map.items()):
+        for fd, obj in map.items():
             flags = 0
             if obj.readable():
                 flags |= select.POLLIN | select.POLLPRI
-            # accepting sockets should not be writable
-            if obj.writable() and not obj.accepting:
+            if obj.writable():
                 flags |= select.POLLOUT
             if flags:
                 # Only check for exceptions if object was either readable
@@ -190,7 +184,7 @@ def poll2(timeout=0.0, map=None):
                 pollster.register(fd, flags)
         try:
             r = pollster.poll(timeout)
-        except select.error as err:
+        except select.error, err:
             if err.args[0] != EINTR:
                 raise
             r = []
@@ -247,7 +241,7 @@ class dispatcher:
             # passed be connected.
             try:
                 self.addr = sock.getpeername()
-            except socket.error as err:
+            except socket.error, err:
                 if err.args[0] == ENOTCONN:
                     # To handle the case where we got an unconnected
                     # socket.
@@ -273,8 +267,6 @@ class dispatcher:
             except TypeError:
                 status.append(repr(self.addr))
         return '<%s at %#x>' % (' '.join(status), id(self))
-
-    __str__ = __repr__
 
     def add_channel(self, map=None):
         #self.log_info('adding channel %s' % self)
@@ -343,8 +335,8 @@ class dispatcher:
     def connect(self, address):
         self.connected = False
         err = self.socket.connect_ex(address)
-        if err in (EINPROGRESS, EALREADY, EWOULDBLOCK) \
-        or err == EINVAL and os.name in ('nt', 'ce'):
+        # XXX Should interpret Winsock return values
+        if err in (EINPROGRESS, EALREADY, EWOULDBLOCK):
             return
         if err in (0, EISCONN):
             self.addr = address
@@ -356,24 +348,21 @@ class dispatcher:
         # XXX can return either an address pair or None
         try:
             conn, addr = self.socket.accept()
-        except TypeError:
-            return None
-        except socket.error as why:
-            if why.args[0] in (EWOULDBLOCK, ECONNABORTED, EAGAIN):
-                return None
+            return conn, addr
+        except socket.error, why:
+            if why.args[0] == EWOULDBLOCK:
+                pass
             else:
                 raise
-        else:
-            return conn, addr
 
     def send(self, data):
         try:
             result = self.socket.send(data)
             return result
-        except socket.error as why:
+        except socket.error, why:
             if why.args[0] == EWOULDBLOCK:
                 return 0
-            elif why.args[0] in _DISCONNECTED:
+            elif why.args[0] in (ECONNRESET, ENOTCONN, ESHUTDOWN, ECONNABORTED):
                 self.handle_close()
                 return 0
             else:
@@ -386,14 +375,14 @@ class dispatcher:
                 # a closed connection is indicated by signaling
                 # a read condition, and having recv() return 0.
                 self.handle_close()
-                return b''
+                return ''
             else:
                 return data
-        except socket.error as why:
+        except socket.error, why:
             # winsock sometimes throws ENOTCONN
-            if why.args[0] in _DISCONNECTED:
+            if why.args[0] in [ECONNRESET, ENOTCONN, ESHUTDOWN, ECONNABORTED]:
                 self.handle_close()
-                return b''
+                return ''
             else:
                 raise
 
@@ -403,7 +392,7 @@ class dispatcher:
         self.del_channel()
         try:
             self.socket.close()
-        except socket.error as why:
+        except socket.error, why:
             if why.args[0] not in (ENOTCONN, EBADF):
                 raise
 
@@ -411,15 +400,10 @@ class dispatcher:
     # references to the underlying socket object.
     def __getattr__(self, attr):
         try:
-            retattr = getattr(self.socket, attr)
+            return getattr(self.socket, attr)
         except AttributeError:
             raise AttributeError("%s instance has no attribute '%s'"
                                  %(self.__class__.__name__, attr))
-        else:
-            msg = "%(me)s.%(attr)s is deprecated; use %(me)s.socket.%(attr)s " \
-                  "instead" % {'me' : self.__class__.__name__, 'attr' : attr}
-            warnings.warn(msg, DeprecationWarning, stacklevel=2)
-            return retattr
 
     # log and log_info may be overridden to provide more sophisticated
     # logging and warning methods. In general, log is for 'hit' logging
@@ -430,7 +414,7 @@ class dispatcher:
 
     def log_info(self, message, type='info'):
         if type not in self.ignore_log_types:
-            print('%s: %s' % (type, message))
+            print '%s: %s' % (type, message)
 
     def handle_read_event(self):
         if self.accepting:
@@ -444,9 +428,6 @@ class dispatcher:
             self.handle_read()
 
     def handle_connect_event(self):
-        err = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-        if err != 0:
-            raise socket.error(err, _strerror(err))
         self.handle_connect()
         self.connected = True
 
@@ -513,13 +494,7 @@ class dispatcher:
         self.log_info('unhandled connect event', 'warning')
 
     def handle_accept(self):
-        pair = self.accept()
-        if pair is not None:
-            self.handle_accepted(*pair)
-
-    def handle_accepted(self, sock, addr):
-        sock.close()
-        self.log_info('unhandled accepted event', 'warning')
+        self.log_info('unhandled accept event', 'warning')
 
     def handle_close(self):
         self.log_info('unhandled close event', 'warning')
@@ -534,7 +509,7 @@ class dispatcher_with_send(dispatcher):
 
     def __init__(self, sock=None, map=None):
         dispatcher.__init__(self, sock, map)
-        self.out_buffer = b''
+        self.out_buffer = ''
 
     def initiate_send(self):
         num_sent = 0
@@ -580,10 +555,10 @@ def compact_traceback():
 def close_all(map=None, ignore_all=False):
     if map is None:
         map = socket_map
-    for x in list(map.values()):
+    for x in map.values():
         try:
             x.close()
-        except OSError as x:
+        except OSError, x:
             if x.args[0] == EBADF:
                 pass
             elif not ignore_all:

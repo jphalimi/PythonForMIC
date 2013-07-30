@@ -5,7 +5,7 @@ Here's an example of the sort of thing that is tested.
 >>> def f(x):
 ...     global x
 Traceback (most recent call last):
-SyntaxError: name 'x' is parameter and global
+SyntaxError: name 'x' is local and global (<doctest test.test_syntax[0]>, line 1)
 
 The tests are all raise SyntaxErrors.  They were created by checking
 each C call that raises SyntaxError.  There are several modules that
@@ -27,13 +27,15 @@ In ast.c, syntax errors are raised by calling ast_error().
 
 Errors from set_context():
 
+TODO(jhylton): "assignment to None" is inconsistent with other messages
+
 >>> obj.None = 1
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[1]>, line 1)
 
 >>> None = 1
 Traceback (most recent call last):
-SyntaxError: assignment to keyword
+SyntaxError: assignment to None (<doctest test.test_syntax[2]>, line 1)
 
 It's a syntax error to assign to the empty tuple.  Why isn't it an
 error to assign to the empty list?  It will always raise some error at
@@ -41,39 +43,35 @@ runtime.
 
 >>> () = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to ()
+SyntaxError: can't assign to () (<doctest test.test_syntax[3]>, line 1)
 
 >>> f() = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to function call
+SyntaxError: can't assign to function call (<doctest test.test_syntax[4]>, line 1)
 
 >>> del f()
 Traceback (most recent call last):
-SyntaxError: can't delete function call
+SyntaxError: can't delete function call (<doctest test.test_syntax[5]>, line 1)
 
 >>> a + 1 = 2
 Traceback (most recent call last):
-SyntaxError: can't assign to operator
+SyntaxError: can't assign to operator (<doctest test.test_syntax[6]>, line 1)
 
 >>> (x for x in x) = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to generator expression
+SyntaxError: can't assign to generator expression (<doctest test.test_syntax[7]>, line 1)
 
 >>> 1 = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to literal
+SyntaxError: can't assign to literal (<doctest test.test_syntax[8]>, line 1)
 
 >>> "abc" = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to literal
-
->>> b"" = 1
-Traceback (most recent call last):
-SyntaxError: can't assign to literal
+SyntaxError: can't assign to literal (<doctest test.test_syntax[9]>, line 1)
 
 >>> `1` = 1
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: can't assign to repr (<doctest test.test_syntax[10]>, line 1)
 
 If the left-hand side of an assignment is a list or tuple, an illegal
 expression inside that contain should still cause a syntax error.
@@ -82,22 +80,22 @@ them.
 
 >>> (a, "b", c) = (1, 2, 3)
 Traceback (most recent call last):
-SyntaxError: can't assign to literal
+SyntaxError: can't assign to literal (<doctest test.test_syntax[11]>, line 1)
 
 >>> [a, b, c + 1] = [1, 2, 3]
 Traceback (most recent call last):
-SyntaxError: can't assign to operator
+SyntaxError: can't assign to operator (<doctest test.test_syntax[12]>, line 1)
 
 >>> a if 1 else b = 1
 Traceback (most recent call last):
-SyntaxError: can't assign to conditional expression
+SyntaxError: can't assign to conditional expression (<doctest test.test_syntax[13]>, line 1)
 
 From compiler_complex_args():
 
 >>> def f(None=1):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[14]>, line 1)
 
 
 From ast_for_arguments():
@@ -105,22 +103,22 @@ From ast_for_arguments():
 >>> def f(x, y=1, z):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: non-default argument follows default argument
+SyntaxError: non-default argument follows default argument (<doctest test.test_syntax[15]>, line 1)
 
 >>> def f(x, None):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[16]>, line 1)
 
 >>> def f(*None):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[17]>, line 1)
 
 >>> def f(**None):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[18]>, line 1)
 
 
 From ast_for_funcdef():
@@ -128,7 +126,7 @@ From ast_for_funcdef():
 >>> def None(x):
 ...     pass
 Traceback (most recent call last):
-SyntaxError: invalid syntax
+SyntaxError: assignment to None (<doctest test.test_syntax[19]>, line 1)
 
 
 From ast_for_call():
@@ -140,7 +138,7 @@ From ast_for_call():
 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 >>> f(x for x in L, 1)
 Traceback (most recent call last):
-SyntaxError: Generator expression must be parenthesized if not sole argument
+SyntaxError: Generator expression must be parenthesized if not sole argument (<doctest test.test_syntax[23]>, line 1)
 >>> f((x for x in L), 1)
 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -172,7 +170,7 @@ SyntaxError: Generator expression must be parenthesized if not sole argument
 ...   i244,  i245,  i246,  i247,  i248,  i249,  i250,  i251,  i252,
 ...   i253,  i254,  i255)
 Traceback (most recent call last):
-SyntaxError: more than 255 arguments
+SyntaxError: more than 255 arguments (<doctest test.test_syntax[25]>, line 1)
 
 The actual error cases counts positional arguments, keyword arguments,
 and generator expression arguments separately.  This test combines the
@@ -206,42 +204,42 @@ three.
 ...   (x for x in i244),  i245,  i246,  i247,  i248,  i249,  i250,  i251,
 ...    i252=1, i253=1,  i254=1,  i255=1)
 Traceback (most recent call last):
-SyntaxError: more than 255 arguments
+SyntaxError: more than 255 arguments (<doctest test.test_syntax[26]>, line 1)
 
 >>> f(lambda x: x[0] = 3)
 Traceback (most recent call last):
-SyntaxError: lambda cannot contain assignment
+SyntaxError: lambda cannot contain assignment (<doctest test.test_syntax[27]>, line 1)
 
 The grammar accepts any test (basically, any expression) in the
 keyword slot of a call site.  Test a few different options.
 
 >>> f(x()=2)
 Traceback (most recent call last):
-SyntaxError: keyword can't be an expression
+SyntaxError: keyword can't be an expression (<doctest test.test_syntax[28]>, line 1)
 >>> f(a or b=1)
 Traceback (most recent call last):
-SyntaxError: keyword can't be an expression
+SyntaxError: keyword can't be an expression (<doctest test.test_syntax[29]>, line 1)
 >>> f(x.y=1)
 Traceback (most recent call last):
-SyntaxError: keyword can't be an expression
+SyntaxError: keyword can't be an expression (<doctest test.test_syntax[30]>, line 1)
 
 
-More set_context():
+From ast_for_expr_stmt():
 
 >>> (x for x in x) += 1
 Traceback (most recent call last):
-SyntaxError: can't assign to generator expression
+SyntaxError: augmented assignment to generator expression not possible (<doctest test.test_syntax[31]>, line 1)
 >>> None += 1
 Traceback (most recent call last):
-SyntaxError: assignment to keyword
+SyntaxError: assignment to None (<doctest test.test_syntax[32]>, line 1)
 >>> f() += 1
 Traceback (most recent call last):
-SyntaxError: can't assign to function call
+SyntaxError: illegal expression for augmented assignment (<doctest test.test_syntax[33]>, line 1)
 
 
 Test continue in finally in weird combinations.
 
-continue in for loop under finally should be ok.
+continue in for loop under finally shouuld be ok.
 
     >>> def test():
     ...     try:
@@ -249,7 +247,7 @@ continue in for loop under finally should be ok.
     ...     finally:
     ...         for abc in range(10):
     ...             continue
-    ...     print(abc)
+    ...     print abc
     >>> test()
     9
 
@@ -263,7 +261,7 @@ Start simple, a continue in a finally should not be allowed.
     ...            continue
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[36]>, line 6)
 
 This is essentially a continue in a finally which should not be allowed.
 
@@ -278,7 +276,7 @@ This is essentially a continue in a finally which should not be allowed.
     ...                pass
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[37]>, line 7)
 
     >>> def foo():
     ...     try:
@@ -287,7 +285,7 @@ This is essentially a continue in a finally which should not be allowed.
     ...         continue
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[38]>, line 5)
 
     >>> def foo():
     ...     for a in ():
@@ -297,7 +295,7 @@ This is essentially a continue in a finally which should not be allowed.
     ...           continue
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[39]>, line 6)
 
     >>> def foo():
     ...     for a in ():
@@ -310,7 +308,7 @@ This is essentially a continue in a finally which should not be allowed.
     ...                 pass
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[40]>, line 7)
 
     >>> def foo():
     ...  for a in ():
@@ -322,7 +320,7 @@ This is essentially a continue in a finally which should not be allowed.
     ...     continue
     Traceback (most recent call last):
       ...
-    SyntaxError: 'continue' not supported inside 'finally' clause
+    SyntaxError: 'continue' not supported inside 'finally' clause (<doctest test.test_syntax[41]>, line 8)
 
 There is one test for a break that is not in a loop.  The compiler
 uses a single data structure to keep track of try-finally and loops,
@@ -330,14 +328,14 @@ so we need to be sure that a break is actually inside a loop.  If it
 isn't, there should be a syntax error.
 
    >>> try:
-   ...     print(1)
+   ...     print 1
    ...     break
-   ...     print(2)
+   ...     print 2
    ... finally:
-   ...     print(3)
+   ...     print 3
    Traceback (most recent call last):
      ...
-   SyntaxError: 'break' outside loop
+   SyntaxError: 'break' outside loop (<doctest test.test_syntax[42]>, line 3)
 
 This should probably raise a better error than a SystemError (or none at all).
 In 2.5 there was a missing exception and an assert was triggered in a debug
@@ -369,51 +367,6 @@ build.  The number of blocks must be greater than CO_MAXBLOCKS.  SF #1565514
      ...
    SystemError: too many statically nested blocks
 
-Misuse of the nonlocal statement can lead to a few unique syntax errors.
-
-   >>> def f(x):
-   ...     nonlocal x
-   Traceback (most recent call last):
-     ...
-   SyntaxError: name 'x' is parameter and nonlocal
-
-   >>> def f():
-   ...     global x
-   ...     nonlocal x
-   Traceback (most recent call last):
-     ...
-   SyntaxError: name 'x' is nonlocal and global
-
-   >>> def f():
-   ...     nonlocal x
-   Traceback (most recent call last):
-     ...
-   SyntaxError: no binding for nonlocal 'x' found
-
-From SF bug #1705365
-   >>> nonlocal x
-   Traceback (most recent call last):
-     ...
-   SyntaxError: nonlocal declaration not allowed at module level
-
-TODO(jhylton): Figure out how to test SyntaxWarning with doctest.
-
-##   >>> def f(x):
-##   ...     def f():
-##   ...         print(x)
-##   ...         nonlocal x
-##   Traceback (most recent call last):
-##     ...
-##   SyntaxWarning: name 'x' is assigned to before nonlocal declaration
-
-##   >>> def f():
-##   ...     x = 1
-##   ...     nonlocal x
-##   Traceback (most recent call last):
-##     ...
-##   SyntaxWarning: name 'x' is assigned to before nonlocal declaration
-
-
 This tests assignment-context; there was a bug in Python 2.5 where compiling
 a complex 'if' (one with 'elif') would fail to notice an invalid suite,
 leading to spurious errors.
@@ -424,7 +377,7 @@ leading to spurious errors.
    ...   pass
    Traceback (most recent call last):
      ...
-   SyntaxError: can't assign to function call
+   SyntaxError: can't assign to function call (<doctest test.test_syntax[44]>, line 2)
 
    >>> if 1:
    ...   pass
@@ -432,27 +385,27 @@ leading to spurious errors.
    ...   x() = 1
    Traceback (most recent call last):
      ...
-   SyntaxError: can't assign to function call
+   SyntaxError: can't assign to function call (<doctest test.test_syntax[45]>, line 4)
 
    >>> if 1:
    ...   x() = 1
    ... elif 1:
    ...   pass
+   ... else:
+   ...   pass
+   Traceback (most recent call last):
+     ...
+   SyntaxError: can't assign to function call (<doctest test.test_syntax[46]>, line 2)
+
+   >>> if 1:
+   ...   pass
+   ... elif 1:
+   ...   x() = 1
    ... else:
    ...   pass
    Traceback (most recent call last):
      ...
-   SyntaxError: can't assign to function call
-
-   >>> if 1:
-   ...   pass
-   ... elif 1:
-   ...   x() = 1
-   ... else:
-   ...   pass
-   Traceback (most recent call last):
-     ...
-   SyntaxError: can't assign to function call
+   SyntaxError: can't assign to function call (<doctest test.test_syntax[47]>, line 4)
 
    >>> if 1:
    ...   pass
@@ -462,59 +415,12 @@ leading to spurious errors.
    ...   x() = 1
    Traceback (most recent call last):
      ...
-   SyntaxError: can't assign to function call
-
-Make sure that the old "raise X, Y[, Z]" form is gone:
-   >>> raise X, Y
-   Traceback (most recent call last):
-     ...
-   SyntaxError: invalid syntax
-   >>> raise X, Y, Z
-   Traceback (most recent call last):
-     ...
-   SyntaxError: invalid syntax
-
+   SyntaxError: can't assign to function call (<doctest test.test_syntax[48]>, line 6)
 
 >>> f(a=23, a=234)
 Traceback (most recent call last):
    ...
-SyntaxError: keyword argument repeated
-
->>> del ()
-Traceback (most recent call last):
-SyntaxError: can't delete ()
-
->>> {1, 2, 3} = 42
-Traceback (most recent call last):
-SyntaxError: can't assign to literal
-
-Corner-cases that used to fail to raise the correct error:
-
-    >>> def f(*, x=lambda __debug__:0): pass
-    Traceback (most recent call last):
-    SyntaxError: assignment to keyword
-
-    >>> def f(*args:(lambda __debug__:0)): pass
-    Traceback (most recent call last):
-    SyntaxError: assignment to keyword
-
-    >>> def f(**kwargs:(lambda __debug__:0)): pass
-    Traceback (most recent call last):
-    SyntaxError: assignment to keyword
-
-    >>> with (lambda *:0): pass
-    Traceback (most recent call last):
-    SyntaxError: named arguments must follow bare *
-
-Corner-cases that used to crash:
-
-    >>> def f(**__debug__): pass
-    Traceback (most recent call last):
-    SyntaxError: assignment to keyword
-
-    >>> def f(*xx, __debug__): pass
-    Traceback (most recent call last):
-    SyntaxError: assignment to keyword
+SyntaxError: keyword argument repeated (<doctest test.test_syntax[49]>, line 1)
 
 """
 
@@ -522,7 +428,7 @@ import re
 import unittest
 import warnings
 
-from test import support
+from test import test_support
 
 class SyntaxTestCase(unittest.TestCase):
 
@@ -536,14 +442,18 @@ class SyntaxTestCase(unittest.TestCase):
         """
         try:
             compile(code, filename, mode)
-        except SyntaxError as err:
+        except SyntaxError, err:
             if subclass and not isinstance(err, subclass):
                 self.fail("SyntaxError is not a %s" % subclass.__name__)
             mo = re.search(errtext, str(err))
             if mo is None:
-                self.fail("SyntaxError did not contain '%r'" % (errtext,))
+                self.fail("%s did not contain '%r'" % (err, errtext,))
         else:
             self.fail("compile() did not raise SyntaxError")
+
+    def test_paren_arg_with_default(self):
+        self._check_error("def f((x)=23): pass",
+                          "parenthesized arg with default")
 
     def test_assign_call(self):
         self._check_error("f() = 1", "assign")
@@ -554,19 +464,28 @@ class SyntaxTestCase(unittest.TestCase):
     def test_global_err_then_warn(self):
         # Bug tickler:  The SyntaxError raised for one global statement
         # shouldn't be clobbered by a SyntaxWarning issued for a later one.
-        source = """if 1:
-            def error(a):
-                global a  # SyntaxError
-            def warning():
-                b = 1
-                global b  # SyntaxWarning
-            """
+        source = re.sub('(?m)^ *:', '', """\
+            :def error(a):
+            :    global a  # SyntaxError
+            :def warning():
+            :    b = 1
+            :    global b  # SyntaxWarning
+            :""")
         warnings.filterwarnings(action='ignore', category=SyntaxWarning)
         self._check_error(source, "global")
         warnings.filters.pop(0)
 
     def test_break_outside_loop(self):
         self._check_error("break", "outside loop")
+
+    def test_delete_deref(self):
+        source = re.sub('(?m)^ *:', '', """\
+            :def foo(x):
+            :  def bar():
+            :    print x
+            :  del x
+            :""")
+        self._check_error(source, "nested scope")
 
     def test_unexpected_indent(self):
         self._check_error("foo()\n bar()\n", "unexpected indent",
@@ -585,9 +504,11 @@ class SyntaxTestCase(unittest.TestCase):
         self._check_error("int(base=10, '2')", "non-keyword arg")
 
 def test_main():
-    support.run_unittest(SyntaxTestCase)
+    test_support.run_unittest(SyntaxTestCase)
     from test import test_syntax
-    support.run_doctest(test_syntax, verbosity=True)
+    with test_support._check_py3k_warnings(("backquote not supported",
+                                             SyntaxWarning)):
+        test_support.run_doctest(test_syntax, verbosity=True)
 
 if __name__ == "__main__":
     test_main()

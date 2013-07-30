@@ -14,7 +14,8 @@ __author__ = "Guido van Rossum <guido@python.org>"
 
 import sys
 import warnings
-from io import StringIO
+from StringIO import StringIO
+
 
 HUGE = 0x7FFFFFFF  # maximum repeat count, default max
 
@@ -28,6 +29,7 @@ def type_repr(type_num):
         for name, val in python_symbols.__dict__.items():
             if type(val) == int: _type_reprs[val] = name
     return _type_reprs.setdefault(type_num, type_num)
+
 
 class Base(object):
 
@@ -45,7 +47,6 @@ class Base(object):
     parent = None  # Parent node pointer, or None
     children = ()  # Tuple of subnodes
     was_changed = False
-    was_checked = False
 
     def __new__(cls, *args, **kwds):
         """Constructor that prevents Base from being instantiated."""
@@ -212,16 +213,6 @@ class Base(object):
                     return None
                 return self.parent.children[i-1]
 
-    def leaves(self):
-        for child in self.children:
-            for x in child.leaves():
-                yield x
-
-    def depth(self):
-        if self.parent is None:
-            return 0
-        return 1 + self.parent.depth()
-
     def get_suffix(self):
         """
         Return the string immediately following the invocant node. This is
@@ -229,21 +220,19 @@ class Base(object):
         """
         next_sib = self.next_sibling
         if next_sib is None:
-            return ""
+            return u""
         return next_sib.prefix
 
     if sys.version_info < (3, 0):
         def __str__(self):
-            return str(self).encode("ascii")
+            return unicode(self).encode("ascii")
+
 
 class Node(Base):
 
     """Concrete implementation for interior nodes."""
 
-    def __init__(self,type, children,
-                 context=None,
-                 prefix=None,
-                 fixers_applied=None):
+    def __init__(self, type, children, context=None, prefix=None):
         """
         Initializer.
 
@@ -260,10 +249,6 @@ class Node(Base):
             ch.parent = self
         if prefix is not None:
             self.prefix = prefix
-        if fixers_applied:
-            self.fixers_applied = fixers_applied[:]
-        else:
-            self.fixers_applied = None
 
     def __repr__(self):
         """Return a canonical string representation."""
@@ -277,7 +262,7 @@ class Node(Base):
 
         This reproduces the input source exactly.
         """
-        return "".join(map(str, self.children))
+        return u"".join(map(unicode, self.children))
 
     if sys.version_info > (3, 0):
         __str__ = __unicode__
@@ -288,8 +273,7 @@ class Node(Base):
 
     def clone(self):
         """Return a cloned (deep) copy of self."""
-        return Node(self.type, [ch.clone() for ch in self.children],
-                    fixers_applied=self.fixers_applied)
+        return Node(self.type, [ch.clone() for ch in self.children])
 
     def post_order(self):
         """Return a post-order iterator for the tree."""
@@ -302,7 +286,7 @@ class Node(Base):
         """Return a pre-order iterator for the tree."""
         yield self
         for child in self.children:
-            for node in child.pre_order():
+            for node in child.post_order():
                 yield node
 
     def _prefix_getter(self):
@@ -357,10 +341,7 @@ class Leaf(Base):
     lineno = 0    # Line where this token starts in the input
     column = 0    # Column where this token tarts in the input
 
-    def __init__(self, type, value,
-                 context=None,
-                 prefix=None,
-                 fixers_applied=[]):
+    def __init__(self, type, value, context=None, prefix=None):
         """
         Initializer.
 
@@ -374,7 +355,6 @@ class Leaf(Base):
         self.value = value
         if prefix is not None:
             self._prefix = prefix
-        self.fixers_applied = fixers_applied[:]
 
     def __repr__(self):
         """Return a canonical string representation."""
@@ -388,7 +368,7 @@ class Leaf(Base):
 
         This reproduces the input source exactly.
         """
-        return self.prefix + str(self.value)
+        return self.prefix + unicode(self.value)
 
     if sys.version_info > (3, 0):
         __str__ = __unicode__
@@ -400,11 +380,7 @@ class Leaf(Base):
     def clone(self):
         """Return a cloned (deep) copy of self."""
         return Leaf(self.type, self.value,
-                    (self.prefix, (self.lineno, self.column)),
-                    fixers_applied=self.fixers_applied)
-
-    def leaves(self):
-        yield self
+                    (self.prefix, (self.lineno, self.column)))
 
     def post_order(self):
         """Return a post-order iterator for the tree."""
@@ -548,7 +524,7 @@ class LeafPattern(BasePattern):
         if type is not None:
             assert 0 <= type < 256, type
         if content is not None:
-            assert isinstance(content, str), repr(content)
+            assert isinstance(content, basestring), repr(content)
         self.type = type
         self.content = content
         self.name = name
@@ -598,7 +574,7 @@ class NodePattern(BasePattern):
         if type is not None:
             assert type >= 256, type
         if content is not None:
-            assert not isinstance(content, str), repr(content)
+            assert not isinstance(content, basestring), repr(content)
             content = list(content)
             for i, item in enumerate(content):
                 assert isinstance(item, BasePattern), (i, item)
@@ -658,8 +634,8 @@ class WildcardPattern(BasePattern):
             content: optional sequence of subsequences of patterns;
                      if absent, matches one node;
                      if present, each subsequence is an alternative [*]
-            min: optional minimum number of times to match, default 0
-            max: optional maximum number of times to match, default HUGE
+            min: optinal minumum number of times to match, default 0
+            max: optional maximum number of times tro match, default HUGE
             name: optional name assigned to this match
 
         [*] Thus, if content is [[a, b, c], [d, e], [f, g, h]] this is
@@ -733,7 +709,7 @@ class WildcardPattern(BasePattern):
         """
         if self.content is None:
             # Shortcut for special case (see __init__.__doc__)
-            for count in range(self.min, 1 + min(len(nodes), self.max)):
+            for count in xrange(self.min, 1 + min(len(nodes), self.max)):
                 r = {}
                 if self.name:
                     r[self.name] = nodes[:count]
@@ -743,11 +719,9 @@ class WildcardPattern(BasePattern):
         else:
             # The reason for this is that hitting the recursion limit usually
             # results in some ugly messages about how RuntimeErrors are being
-            # ignored. We only have to do this on CPython, though, because other
-            # implementations don't have this nasty bug in the first place.
-            if hasattr(sys, "getrefcount"):
-                save_stderr = sys.stderr
-                sys.stderr = StringIO()
+            # ignored.
+            save_stderr = sys.stderr
+            sys.stderr = StringIO()
             try:
                 for count, r in self._recursive_matches(nodes, 0):
                     if self.name:
@@ -761,8 +735,7 @@ class WildcardPattern(BasePattern):
                         r[self.name] = nodes[:count]
                     yield count, r
             finally:
-                if hasattr(sys, "getrefcount"):
-                    sys.stderr = save_stderr
+                sys.stderr = save_stderr
 
     def _iterative_matches(self, nodes):
         """Helper to iteratively yield the matches."""

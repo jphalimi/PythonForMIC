@@ -17,7 +17,7 @@ The following exception classes are defined in the :mod:`email.errors` module:
 
 .. exception:: MessageParseError()
 
-   This is the base class for exceptions raised by the :class:`~email.parser.Parser`
+   This is the base class for exceptions thrown by the :class:`~email.parser.Parser`
    class.  It is derived from :exc:`MessageError`.
 
 
@@ -66,6 +66,9 @@ object would have a defect, but the containing messages would not.
 
 All defect classes are subclassed from :class:`email.errors.MessageDefect`, but
 this class is *not* an exception!
+
+.. versionadded:: 2.4
+   All the defect classes were added.
 
 * :class:`NoBoundaryInMultipartDefect` -- A message claimed to be a multipart,
   but had no :mimetype:`boundary` parameter.

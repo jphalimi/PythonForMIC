@@ -4,9 +4,7 @@
 .. module:: mailcap
    :synopsis: Mailcap file handling.
 
-**Source code:** :source:`Lib/mailcap.py`
 
---------------
 
 Mailcap files are used to configure how MIME-aware applications such as mail
 readers and Web browsers react to files with different MIME types. (The name
@@ -22,7 +20,7 @@ Mechanism For Multimedia Mail Format Information," but is not an Internet
 standard.  However, mailcap files are supported on most Unix systems.
 
 
-.. function:: findmatch(caps, MIMEtype, key='view', filename='/dev/null', plist=[])
+.. function:: findmatch(caps, MIMEtype[, key[, filename[, plist]]])
 
    Return a 2-tuple; the first element is a string containing the command line to
    be executed (which can be passed to :func:`os.system`), and the second element

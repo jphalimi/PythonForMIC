@@ -5,11 +5,11 @@
 # Converted to PyUnit by Peter Hansen <peter@engcorp.com>.
 # Currently maintained by Greg Ward.
 #
-# $Id$
+# $Id: test_textwrap.py 67896 2008-12-21 17:01:26Z benjamin.peterson $
 #
 
 import unittest
-from test import support
+from test import test_support
 
 from textwrap import TextWrapper, wrap, fill, dedent
 
@@ -23,13 +23,13 @@ class BaseTestCase(unittest.TestCase):
             for i in range(len(textin)):
                 result.append("  %d: %r" % (i, textin[i]))
             result = '\n'.join(result)
-        elif isinstance(textin, str):
+        elif isinstance(textin, basestring):
             result = "  %s\n" % repr(textin)
         return result
 
 
     def check(self, result, expect):
-        self.assertEqual(result, expect,
+        self.assertEquals(result, expect,
             'expected:\n%s\nbut got:\n%s' % (
                 self.show(expect), self.show(result)))
 
@@ -39,9 +39,9 @@ class BaseTestCase(unittest.TestCase):
 
     def check_split(self, text, expect):
         result = self.wrapper._split(text)
-        self.assertEqual(result, expect,
-                         "\nexpected %r\n"
-                         "but got  %r" % (expect, result))
+        self.assertEquals(result, expect,
+                          "\nexpected %r\n"
+                          "but got  %r" % (expect, result))
 
 
 class WrapTestCase(BaseTestCase):
@@ -174,7 +174,7 @@ What a mess!
         text = ("Python 1.0.0 was released on 1994-01-26.  Python 1.0.1 was\n"
                 "released on 1994-02-15.")
 
-        self.check_wrap(text, 30, ['Python 1.0.0 was released on',
+        self.check_wrap(text, 35, ['Python 1.0.0 was released on',
                                    '1994-01-26.  Python 1.0.1 was',
                                    'released on 1994-02-15.'])
         self.check_wrap(text, 40, ['Python 1.0.0 was released on 1994-01-26.',
@@ -340,6 +340,27 @@ What a mess!
                          "with     ", "much white", "space."],
                         drop_whitespace=False)
 
+    if test_support.have_unicode:
+        def test_unicode(self):
+            # *Very* simple test of wrapping Unicode strings.  I'm sure
+            # there's more to it than this, but let's at least make
+            # sure textwrap doesn't crash on Unicode input!
+            text = u"Hello there, how are you today?"
+            self.check_wrap(text, 50, [u"Hello there, how are you today?"])
+            self.check_wrap(text, 20, [u"Hello there, how are", "you today?"])
+            olines = self.wrapper.wrap(text)
+            assert isinstance(olines, list) and isinstance(olines[0], unicode)
+            otext = self.wrapper.fill(text)
+            assert isinstance(otext, unicode)
+
+        def test_no_split_at_umlaut(self):
+            text = u"Die Empf\xe4nger-Auswahl"
+            self.check_wrap(text, 13, [u"Die", u"Empf\xe4nger-", u"Auswahl"])
+
+        def test_umlaut_followed_by_dash(self):
+            text = u"aa \xe4\xe4-\xe4\xe4"
+            self.check_wrap(text, 7, [u"aa \xe4\xe4-", u"\xe4\xe4"])
+
     def test_split(self):
         # Ensure that the standard _split() method works as advertised
         # in the comments
@@ -364,14 +385,6 @@ What a mess!
         text = "Whatever, it doesn't matter."
         self.assertRaises(ValueError, wrap, text, 0)
         self.assertRaises(ValueError, wrap, text, -1)
-
-    def test_no_split_at_umlaut(self):
-        text = "Die Empf\xe4nger-Auswahl"
-        self.check_wrap(text, 13, ["Die", "Empf\xe4nger-", "Auswahl"])
-
-    def test_umlaut_followed_by_dash(self):
-        text = "aa \xe4\xe4-\xe4\xe4"
-        self.check_wrap(text, 7, ["aa \xe4\xe4-", "\xe4\xe4"])
 
 
 class LongWordTestCase (BaseTestCase):
@@ -490,7 +503,7 @@ class DedentTestCase(unittest.TestCase):
 
     def assertUnchanged(self, text):
         """assert that dedent() has no effect on 'text'"""
-        self.assertEqual(text, dedent(text))
+        self.assertEquals(text, dedent(text))
 
     def test_dedent_nomargin(self):
         # No lines indented.
@@ -513,17 +526,17 @@ class DedentTestCase(unittest.TestCase):
         # All lines indented by two spaces.
         text = "  Hello there.\n  How are ya?\n  Oh good."
         expect = "Hello there.\nHow are ya?\nOh good."
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         # Same, with blank lines.
         text = "  Hello there.\n\n  How are ya?\n  Oh good.\n"
         expect = "Hello there.\n\nHow are ya?\nOh good.\n"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         # Now indent one of the blank lines.
         text = "  Hello there.\n  \n  How are ya?\n  Oh good.\n"
         expect = "Hello there.\n\nHow are ya?\nOh good.\n"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
     def test_dedent_uneven(self):
         # Lines indented unevenly.
@@ -537,27 +550,27 @@ def foo():
     while 1:
         return foo
 '''
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         # Uneven indentation with a blank line.
         text = "  Foo\n    Bar\n\n   Baz\n"
         expect = "Foo\n  Bar\n\n Baz\n"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         # Uneven indentation with a whitespace-only line.
         text = "  Foo\n    Bar\n \n   Baz\n"
         expect = "Foo\n  Bar\n\n Baz\n"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
     # dedent() should not mangle internal tabs
     def test_dedent_preserve_internal_tabs(self):
         text = "  hello\tthere\n  how are\tyou?"
         expect = "hello\tthere\nhow are\tyou?"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         # make sure that it preserves tabs when it's not making any
         # changes at all
-        self.assertEqual(expect, dedent(expect))
+        self.assertEquals(expect, dedent(expect))
 
     # dedent() should not mangle tabs in the margin (i.e.
     # tabs and spaces both count as margin, but are *not*
@@ -573,21 +586,21 @@ def foo():
         # dedent() only removes whitespace that can be uniformly removed!
         text = "\thello there\n\thow are you?"
         expect = "hello there\nhow are you?"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         text = "  \thello there\n  \thow are you?"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         text = "  \t  hello there\n  \t  how are you?"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
         text = "  \thello there\n  \t  how are you?"
         expect = "hello there\n  how are you?"
-        self.assertEqual(expect, dedent(text))
+        self.assertEquals(expect, dedent(text))
 
 
 def test_main():
-    support.run_unittest(WrapTestCase,
+    test_support.run_unittest(WrapTestCase,
                               LongWordTestCase,
                               IndentTestCases,
                               DedentTestCase)

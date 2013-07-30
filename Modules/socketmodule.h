@@ -8,7 +8,7 @@
 #   include <sys/socket.h>
 # endif
 # include <netinet/in.h>
-# if !(defined(__CYGWIN__) || (defined(PYOS_OS2) && defined(PYCC_VACPP)))
+# if !(defined(__BEOS__) || defined(__CYGWIN__) || (defined(PYOS_OS2) && defined(PYCC_VACPP)))
 #  include <netinet/tcp.h>
 # endif
 
@@ -78,7 +78,6 @@ extern "C" {
 /* Python module and C API name */
 #define PySocket_MODULE_NAME    "_socket"
 #define PySocket_CAPI_NAME      "CAPI"
-#define PySocket_CAPSULE_NAME   PySocket_MODULE_NAME "." PySocket_CAPI_NAME
 
 /* Abstract the socket file descriptor type */
 #ifdef MS_WINDOWS
@@ -91,14 +90,6 @@ typedef SOCKET SOCKET_T;
 #else
 typedef int SOCKET_T;
 #       define SIZEOF_SOCKET_T SIZEOF_INT
-#endif
-
-#if SIZEOF_SOCKET_T <= SIZEOF_LONG
-#define PyLong_FromSocket_t(fd) PyLong_FromLong((SOCKET_T)(fd))
-#define PyLong_AsSocket_t(fd) (SOCKET_T)PyLong_AsLong(fd)
-#else
-#define PyLong_FromSocket_t(fd) PyLong_FromLongLong((SOCKET_T)(fd))
-#define PyLong_AsSocket_t(fd) (SOCKET_T)PyLong_AsLongLong(fd)
 #endif
 
 /* Socket address */
@@ -151,12 +142,12 @@ typedef struct {
     the _socket module. Since cross-DLL linking introduces a lot of
     problems on many platforms, the "trick" is to wrap the
     C API of a module in a struct which then gets exported to
-    other modules via a PyCapsule.
+    other modules via a PyCObject.
 
     The code in socketmodule.c defines this struct (which currently
     only contains the type object reference, but could very
     well also include other C APIs needed by other modules)
-    and exports it as PyCapsule via the module dictionary
+    and exports it as PyCObject via the module dictionary
     under the name "CAPI".
 
     Other modules can now include the socketmodule.h file
@@ -196,10 +187,76 @@ typedef struct {
 typedef struct {
     PyTypeObject *Sock_Type;
     PyObject *error;
-    PyObject *timeout_error;
 } PySocketModule_APIObject;
 
-#define PySocketModule_ImportModuleAndAPI() PyCapsule_Import(PySocket_CAPSULE_NAME, 1)
+/* XXX The net effect of the following appears to be to define a function
+   XXX named PySocketModule_APIObject in _ssl.c.  It's unclear why it isn't
+   XXX defined there directly.
+
+   >>> It's defined here because other modules might also want to use
+   >>> the C API.
+
+*/
+#ifndef PySocket_BUILDING_SOCKET
+
+/* --- C API ----------------------------------------------------*/
+
+/* Interfacestructure to C API for other modules.
+   Call PySocketModule_ImportModuleAndAPI() to initialize this
+   structure. After that usage is simple:
+
+   if (!PyArg_ParseTuple(args, "O!|zz:ssl",
+                         &PySocketModule.Sock_Type, (PyObject*)&Sock,
+                         &key_file, &cert_file))
+     return NULL;
+   ...
+*/
+
+static
+PySocketModule_APIObject PySocketModule;
+
+/* You *must* call this before using any of the functions in
+   PySocketModule and check its outcome; otherwise all accesses will
+   result in a segfault. Returns 0 on success. */
+
+#ifndef DPRINTF
+# define DPRINTF if (0) printf
+#endif
+
+static
+int PySocketModule_ImportModuleAndAPI(void)
+{
+    PyObject *mod = 0, *v = 0;
+    char *apimodule = PySocket_MODULE_NAME;
+    char *apiname = PySocket_CAPI_NAME;
+    void *api;
+
+    DPRINTF("Importing the %s C API...\n", apimodule);
+    mod = PyImport_ImportModuleNoBlock(apimodule);
+    if (mod == NULL)
+        goto onError;
+    DPRINTF(" %s package found\n", apimodule);
+    v = PyObject_GetAttrString(mod, apiname);
+    if (v == NULL)
+        goto onError;
+    Py_DECREF(mod);
+    DPRINTF(" API object %s found\n", apiname);
+    api = PyCObject_AsVoidPtr(v);
+    if (api == NULL)
+        goto onError;
+    Py_DECREF(v);
+    memcpy(&PySocketModule, api, sizeof(PySocketModule));
+    DPRINTF(" API object loaded and initialized.\n");
+    return 0;
+
+ onError:
+    DPRINTF(" not found.\n");
+    Py_XDECREF(mod);
+    Py_XDECREF(v);
+    return -1;
+}
+
+#endif /* !PySocket_BUILDING_SOCKET */
 
 #ifdef __cplusplus
 }

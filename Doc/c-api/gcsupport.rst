@@ -12,6 +12,9 @@ other objects, or which only store references to atomic types (such as numbers
 or strings), do not need to provide any explicit support for garbage
 collection.
 
+.. An example showing the use of these interfaces can be found in "Supporting the
+.. Cycle Collector (XXX not found: ../ext/example-cycle-support.html)".
+
 To create a container type, the :attr:`tp_flags` field of the type object must
 include the :const:`Py_TPFLAGS_HAVE_GC` and provide an implementation of the
 :attr:`tp_traverse` handler.  If instances of the type are mutable, a
@@ -27,32 +30,40 @@ include the :const:`Py_TPFLAGS_HAVE_GC` and provide an implementation of the
 
 Constructors for container types must conform to two rules:
 
-#. The memory for the object must be allocated using :c:func:`PyObject_GC_New`
-   or :c:func:`PyObject_GC_NewVar`.
+#. The memory for the object must be allocated using :cfunc:`PyObject_GC_New`
+   or :cfunc:`PyObject_GC_NewVar`.
 
 #. Once all the fields which may contain references to other containers are
-   initialized, it must call :c:func:`PyObject_GC_Track`.
+   initialized, it must call :cfunc:`PyObject_GC_Track`.
 
 
-.. c:function:: TYPE* PyObject_GC_New(TYPE, PyTypeObject *type)
+.. cfunction:: TYPE* PyObject_GC_New(TYPE, PyTypeObject *type)
 
-   Analogous to :c:func:`PyObject_New` but for container objects with the
+   Analogous to :cfunc:`PyObject_New` but for container objects with the
    :const:`Py_TPFLAGS_HAVE_GC` flag set.
 
 
-.. c:function:: TYPE* PyObject_GC_NewVar(TYPE, PyTypeObject *type, Py_ssize_t size)
+.. cfunction:: TYPE* PyObject_GC_NewVar(TYPE, PyTypeObject *type, Py_ssize_t size)
 
-   Analogous to :c:func:`PyObject_NewVar` but for container objects with the
+   Analogous to :cfunc:`PyObject_NewVar` but for container objects with the
    :const:`Py_TPFLAGS_HAVE_GC` flag set.
 
+   .. versionchanged:: 2.5
+      This function used an :ctype:`int` type for *size*. This might require
+      changes in your code for properly supporting 64-bit systems.
 
-.. c:function:: TYPE* PyObject_GC_Resize(TYPE, PyVarObject *op, Py_ssize_t newsize)
 
-   Resize an object allocated by :c:func:`PyObject_NewVar`.  Returns the
+.. cfunction:: TYPE* PyObject_GC_Resize(TYPE, PyVarObject *op, Py_ssize_t newsize)
+
+   Resize an object allocated by :cfunc:`PyObject_NewVar`.  Returns the
    resized object or *NULL* on failure.
 
+   .. versionchanged:: 2.5
+      This function used an :ctype:`int` type for *newsize*. This might
+      require changes in your code for properly supporting 64-bit systems.
 
-.. c:function:: void PyObject_GC_Track(PyObject *op)
+
+.. cfunction:: void PyObject_GC_Track(PyObject *op)
 
    Adds the object *op* to the set of container objects tracked by the
    collector.  The collector can run at unexpected times so objects must be
@@ -61,44 +72,44 @@ Constructors for container types must conform to two rules:
    end of the constructor.
 
 
-.. c:function:: void _PyObject_GC_TRACK(PyObject *op)
+.. cfunction:: void _PyObject_GC_TRACK(PyObject *op)
 
-   A macro version of :c:func:`PyObject_GC_Track`.  It should not be used for
+   A macro version of :cfunc:`PyObject_GC_Track`.  It should not be used for
    extension modules.
 
 Similarly, the deallocator for the object must conform to a similar pair of
 rules:
 
 #. Before fields which refer to other containers are invalidated,
-   :c:func:`PyObject_GC_UnTrack` must be called.
+   :cfunc:`PyObject_GC_UnTrack` must be called.
 
-#. The object's memory must be deallocated using :c:func:`PyObject_GC_Del`.
-
-
-.. c:function:: void PyObject_GC_Del(void *op)
-
-   Releases memory allocated to an object using :c:func:`PyObject_GC_New` or
-   :c:func:`PyObject_GC_NewVar`.
+#. The object's memory must be deallocated using :cfunc:`PyObject_GC_Del`.
 
 
-.. c:function:: void PyObject_GC_UnTrack(void *op)
+.. cfunction:: void PyObject_GC_Del(void *op)
+
+   Releases memory allocated to an object using :cfunc:`PyObject_GC_New` or
+   :cfunc:`PyObject_GC_NewVar`.
+
+
+.. cfunction:: void PyObject_GC_UnTrack(void *op)
 
    Remove the object *op* from the set of container objects tracked by the
-   collector.  Note that :c:func:`PyObject_GC_Track` can be called again on
+   collector.  Note that :cfunc:`PyObject_GC_Track` can be called again on
    this object to add it back to the set of tracked objects.  The deallocator
    (:attr:`tp_dealloc` handler) should call this for the object before any of
    the fields used by the :attr:`tp_traverse` handler become invalid.
 
 
-.. c:function:: void _PyObject_GC_UNTRACK(PyObject *op)
+.. cfunction:: void _PyObject_GC_UNTRACK(PyObject *op)
 
-   A macro version of :c:func:`PyObject_GC_UnTrack`.  It should not be used for
+   A macro version of :cfunc:`PyObject_GC_UnTrack`.  It should not be used for
    extension modules.
 
 The :attr:`tp_traverse` handler accepts a function parameter of this type:
 
 
-.. c:type:: int (*visitproc)(PyObject *object, void *arg)
+.. ctype:: int (*visitproc)(PyObject *object, void *arg)
 
    Type of the visitor function passed to the :attr:`tp_traverse` handler.
    The function should be called with an object to traverse as *object* and
@@ -110,7 +121,7 @@ The :attr:`tp_traverse` handler accepts a function parameter of this type:
 The :attr:`tp_traverse` handler must have the following type:
 
 
-.. c:type:: int (*traverseproc)(PyObject *self, visitproc visit, void *arg)
+.. ctype:: int (*traverseproc)(PyObject *self, visitproc visit, void *arg)
 
    Traversal function for a container object.  Implementations must call the
    *visit* function for each object directly contained by *self*, with the
@@ -119,12 +130,12 @@ The :attr:`tp_traverse` handler must have the following type:
    object argument.  If *visit* returns a non-zero value that value should be
    returned immediately.
 
-To simplify writing :attr:`tp_traverse` handlers, a :c:func:`Py_VISIT` macro is
+To simplify writing :attr:`tp_traverse` handlers, a :cfunc:`Py_VISIT` macro is
 provided.  In order to use this macro, the :attr:`tp_traverse` implementation
 must name its arguments exactly *visit* and *arg*:
 
 
-.. c:function:: void Py_VISIT(PyObject *o)
+.. cfunction:: void Py_VISIT(PyObject *o)
 
    Call the *visit* callback, with arguments *o* and *arg*. If *visit* returns
    a non-zero value, then return it.  Using this macro, :attr:`tp_traverse`
@@ -138,15 +149,17 @@ must name its arguments exactly *visit* and *arg*:
           return 0;
       }
 
-The :attr:`tp_clear` handler must be of the :c:type:`inquiry` type, or *NULL*
+   .. versionadded:: 2.4
+
+The :attr:`tp_clear` handler must be of the :ctype:`inquiry` type, or *NULL*
 if the object is immutable.
 
 
-.. c:type:: int (*inquiry)(PyObject *self)
+.. ctype:: int (*inquiry)(PyObject *self)
 
    Drop references that may have created reference cycles.  Immutable objects
    do not have to define this method since they can never directly create
    reference cycles.  Note that the object must still be valid after calling
-   this method (don't just call :c:func:`Py_DECREF` on a reference).  The
+   this method (don't just call :cfunc:`Py_DECREF` on a reference).  The
    collector will call this method if it detects that this object is involved
    in a reference cycle.

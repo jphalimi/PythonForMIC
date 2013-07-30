@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/env python
 
 """Tool for measuring execution time of small code snippets.
 
@@ -122,27 +122,27 @@ class Timer:
         """Constructor.  See class doc string."""
         self.timer = timer
         ns = {}
-        if isinstance(stmt, str):
+        if isinstance(stmt, basestring):
             stmt = reindent(stmt, 8)
-            if isinstance(setup, str):
+            if isinstance(setup, basestring):
                 setup = reindent(setup, 4)
                 src = template % {'stmt': stmt, 'setup': setup}
-            elif hasattr(setup, '__call__'):
+            elif callable(setup):
                 src = template % {'stmt': stmt, 'setup': '_setup()'}
                 ns['_setup'] = setup
             else:
                 raise ValueError("setup is neither a string nor callable")
             self.src = src # Save for traceback display
             code = compile(src, dummy_src_name, "exec")
-            exec(code, globals(), ns)
+            exec code in globals(), ns
             self.inner = ns["inner"]
-        elif hasattr(stmt, '__call__'):
+        elif callable(stmt):
             self.src = None
-            if isinstance(setup, str):
+            if isinstance(setup, basestring):
                 _setup = setup
                 def setup():
-                    exec(_setup, globals(), ns)
-            elif not hasattr(setup, '__call__'):
+                    exec _setup in globals(), ns
+            elif not callable(setup):
                 raise ValueError("setup is neither a string nor callable")
             self.inner = _template_func(setup, stmt)
         else:
@@ -191,11 +191,9 @@ class Timer:
             it = [None] * number
         gcold = gc.isenabled()
         gc.disable()
-        try:
-            timing = self.inner(it, self.timer)
-        finally:
-            if gcold:
-                gc.enable()
+        timing = self.inner(it, self.timer)
+        if gcold:
+            gc.enable()
         return timing
 
     def repeat(self, repeat=default_repeat, number=default_number):
@@ -234,10 +232,10 @@ def repeat(stmt="pass", setup="pass", timer=default_timer,
     """Convenience function to create Timer object and call repeat method."""
     return Timer(stmt, setup, timer).repeat(repeat, number)
 
-def main(args=None, *, _wrap_timer=None):
+def main(args=None):
     """Main program, used when run as a script.
 
-    The optional 'args' argument specifies the command line to be parsed,
+    The optional argument specifies the command line to be parsed,
     defaulting to sys.argv[1:].
 
     The return value is an exit code to be passed to sys.exit(); it
@@ -246,10 +244,6 @@ def main(args=None, *, _wrap_timer=None):
     When an exception happens during timing, a traceback is printed to
     stderr and the return value is 1.  Exceptions at other times
     (including the template compilation) are not caught.
-
-    '_wrap_timer' is an internal interface used for unit testing.  If it
-    is not None, it must be a callable that accepts a timer function
-    and returns another timer function (used for unit testing).
     """
     if args is None:
         args = sys.argv[1:]
@@ -258,9 +252,9 @@ def main(args=None, *, _wrap_timer=None):
         opts, args = getopt.getopt(args, "n:s:r:tcvh",
                                    ["number=", "setup=", "repeat=",
                                     "time", "clock", "verbose", "help"])
-    except getopt.error as err:
-        print(err)
-        print("use -h/--help for command line help")
+    except getopt.error, err:
+        print err
+        print "use -h/--help for command line help"
         return 2
     timer = default_timer
     stmt = "\n".join(args) or "pass"
@@ -287,7 +281,7 @@ def main(args=None, *, _wrap_timer=None):
                 precision += 1
             verbose += 1
         if o in ("-h", "--help"):
-            print(__doc__, end=' ')
+            print __doc__,
             return 0
     setup = "\n".join(setup) or "pass"
     # Include the current directory, so that local imports work (sys.path
@@ -295,8 +289,6 @@ def main(args=None, *, _wrap_timer=None):
     # directory)
     import os
     sys.path.insert(0, os.curdir)
-    if _wrap_timer is not None:
-        timer = _wrap_timer(timer)
     t = Timer(stmt, setup, timer)
     if number == 0:
         # determine number so that 0.2 <= total time < 2.0
@@ -308,7 +300,7 @@ def main(args=None, *, _wrap_timer=None):
                 t.print_exc()
                 return 1
             if verbose:
-                print("%d loops -> %.*g secs" % (number, precision, x))
+                print "%d loops -> %.*g secs" % (number, precision, x)
             if x >= 0.2:
                 break
     try:
@@ -318,18 +310,18 @@ def main(args=None, *, _wrap_timer=None):
         return 1
     best = min(r)
     if verbose:
-        print("raw times:", " ".join(["%.*g" % (precision, x) for x in r]))
-    print("%d loops," % number, end=' ')
+        print "raw times:", " ".join(["%.*g" % (precision, x) for x in r])
+    print "%d loops," % number,
     usec = best * 1e6 / number
     if usec < 1000:
-        print("best of %d: %.*g usec per loop" % (repeat, precision, usec))
+        print "best of %d: %.*g usec per loop" % (repeat, precision, usec)
     else:
         msec = usec / 1000
         if msec < 1000:
-            print("best of %d: %.*g msec per loop" % (repeat, precision, msec))
+            print "best of %d: %.*g msec per loop" % (repeat, precision, msec)
         else:
             sec = msec / 1000
-            print("best of %d: %.*g sec per loop" % (repeat, precision, sec))
+            print "best of %d: %.*g sec per loop" % (repeat, precision, sec)
     return None
 
 if __name__ == "__main__":

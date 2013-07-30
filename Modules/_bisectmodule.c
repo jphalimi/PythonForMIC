@@ -52,7 +52,7 @@ bisect_right(PyObject *self, PyObject *args, PyObject *kw)
     index = internal_bisect_right(list, item, lo, hi);
     if (index < 0)
         return NULL;
-    return PyLong_FromSsize_t(index);
+    return PyInt_FromSsize_t(index);
 }
 
 PyDoc_STRVAR(bisect_right_doc,
@@ -86,7 +86,8 @@ insort_right(PyObject *self, PyObject *args, PyObject *kw)
         if (PyList_Insert(list, index, item) < 0)
             return NULL;
     } else {
-        result = PyObject_CallMethod(list, "insert", "nO", index, item);
+        result = PyObject_CallMethod(list, "insert", "nO",
+                                     index, item);
         if (result == NULL)
             return NULL;
         Py_DECREF(result);
@@ -152,7 +153,7 @@ bisect_left(PyObject *self, PyObject *args, PyObject *kw)
     index = internal_bisect_left(list, item, lo, hi);
     if (index < 0)
         return NULL;
-    return PyLong_FromSsize_t(index);
+    return PyInt_FromSsize_t(index);
 }
 
 PyDoc_STRVAR(bisect_left_doc,
@@ -186,7 +187,8 @@ insort_left(PyObject *self, PyObject *args, PyObject *kw)
         if (PyList_Insert(list, index, item) < 0)
             return NULL;
     } else {
-        result = PyObject_CallMethod(list, "insert", "iO", index, item);
+        result = PyObject_CallMethod(list, "insert", "iO",
+                                     index, item);
         if (result == NULL)
             return NULL;
         Py_DECREF(result);
@@ -232,21 +234,10 @@ having to sort the list after each insertion. For long lists of items with\n\
 expensive comparison operations, this can be an improvement over the more\n\
 common approach.\n");
 
-
-static struct PyModuleDef _bisectmodule = {
-    PyModuleDef_HEAD_INIT,
-    "_bisect",
-    module_doc,
-    -1,
-    bisect_methods,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
 PyMODINIT_FUNC
-PyInit__bisect(void)
+init_bisect(void)
 {
-    return PyModule_Create(&_bisectmodule);
+    PyObject *m;
+
+    m = Py_InitModule3("_bisect", bisect_methods, module_doc);
 }

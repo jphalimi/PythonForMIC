@@ -55,45 +55,6 @@ PyBuffer_FromReadWriteMemory:int:size::
 PyBuffer_New:PyObject*::+1:
 PyBuffer_New:int:size::
 
-PyCapsule_GetContext:void *:::
-PyCapsule_GetContext:PyObject*:self:0:
-
-PyCapsule_GetDestructor:void (*)(PyObject *):::
-PyCapsule_GetDestructor:PyObject*:self:0:
-
-PyCapsule_GetName:const char *:::
-PyCapsule_GetName:PyObject*:self:0:
-
-PyCapsule_GetPointer:void*:::
-PyCapsule_GetPointer:PyObject*:self:0:
-PyCapsule_GetPointer:const char *:name::
-
-PyCapsule_Import:void *:::
-PyCapsule_Import:const char *:name::
-PyCapsule_Import:int:no_block::
-
-PyCapsule_New:PyObject*::+1:
-PyCapsule_New:void*:pointer::
-PyCapsule_New:const char *:name::
-PyCapsule_New::void (* destructor)(PyObject* )::
-
-PyCapsule_SetContext:int:::
-PyCapsule_SetContext:PyObject*:self:0:
-PyCapsule_SetContext:void *:context::
-
-PyCapsule_SetDestructor:int:::
-PyCapsule_SetDestructor:PyObject*:self:0:
-PyCapsule_SetDestructor:void (*)(PyObject *):destructor::
-
-PyCapsule_SetName:int:::
-PyCapsule_SetName:PyObject*:self:0:
-PyCapsule_SetName:const char *:name::
-
-PyCapsule_SetPointer:int:::
-PyCapsule_SetPointer:PyObject*:self:0:
-PyCapsule_SetPointer:void*:pointer::
-
-
 PyCObject_AsVoidPtr:void*:::
 PyCObject_AsVoidPtr:PyObject*:self:0:
 
@@ -281,12 +242,6 @@ PyErr_NewException:char*:name::
 PyErr_NewException:PyObject*:base:0:
 PyErr_NewException:PyObject*:dict:0:
 
-PyErr_NewExceptionWithDoc:PyObject*::+1:
-PyErr_NewExceptionWithDoc:char*:name::
-PyErr_NewExceptionWithDoc:char*:doc::
-PyErr_NewExceptionWithDoc:PyObject*:base:0:
-PyErr_NewExceptionWithDoc:PyObject*:dict:0:
-
 PyErr_NoMemory:PyObject*::null:
 
 PyErr_NormalizeException:void:::
@@ -344,6 +299,10 @@ PyErr_Format:PyObject*:exception:+1:
 PyErr_Format:char*:format::
 PyErr_Format::...::
 
+PyErr_Warn:int:::
+PyErr_Warn:PyObject*:category:0:
+PyErr_Warn:char*:message::
+
 PyErr_WarnEx:int:::
 PyErr_WarnEx:PyObject*:category:0:
 PyErr_WarnEx:const char*:message::
@@ -388,15 +347,6 @@ PyFile_FromFile:char*:name::
 PyFile_FromFile:char*:mode::
 PyFile_FromFile:int(*:close)::
 
-PyFile_FromFileEx:PyObject*::+1:
-PyFile_FromFileEx:FILE*:fp::
-PyFile_FromFileEx:char*:name::
-PyFile_FromFileEx:char*:mode::
-PyFile_FromFileEx:int(*:close)::
-PyFile_FromFileEx:int:buffering::
-PyFile_FromFileEx:char*:encoding::
-PyFile_FromFileEx:char*:newline::
-
 PyFile_FromString:PyObject*::+1:
 PyFile_FromString:char*:name::
 PyFile_FromString:char*:mode::
@@ -440,6 +390,7 @@ PyFloat_FromDouble:double:v::
 
 PyFloat_FromString:PyObject*::+1:
 PyFloat_FromString:PyObject*:str:0:
+PyFloat_FromString:char**:pend:0:ignored
 
 PyFrozenSet_New:PyObject*::+1:
 PyFrozenSet_New:PyObject*:iterable:0:
@@ -778,6 +729,10 @@ PyNumber_And:PyObject*:o2:0:
 PyNumber_Check:PyObject*:o:0:
 PyNumber_Check:int:::
 
+PyNumber_Coerce:int:::
+PyNumber_Coerce:PyObject**:p1:+1:
+PyNumber_Coerce:PyObject**:p2:+1:
+
 PyNumber_Divide:PyObject*::+1:
 PyNumber_Divide:PyObject*:o1:0:
 PyNumber_Divide:PyObject*:o2:0:
@@ -846,6 +801,9 @@ PyNumber_InPlaceXor:PyObject*::+1:
 PyNumber_InPlaceXor:PyObject*:v:0:
 PyNumber_InPlaceXor:PyObject*:w:0:
 
+PyNumber_Int:PyObject*::+1:
+PyNumber_Int:PyObject*:o:0:
+
 PyNumber_Invert:PyObject*::+1:
 PyNumber_Invert:PyObject*:o:0:
 
@@ -894,6 +852,9 @@ PyNumber_TrueDivide:PyObject*:w:0:
 PyNumber_Xor:PyObject*::+1:
 PyNumber_Xor:PyObject*:o1:0:
 PyNumber_Xor:PyObject*:o2:0:
+
+PyOS_GetLastModificationTime:long:::
+PyOS_GetLastModificationTime:char*:filename::
 
 PyObject_AsFileDescriptor:int::: 
 PyObject_AsFileDescriptor:PyObject*:o:0:
@@ -1305,17 +1266,12 @@ PyString_AsEncodedString:const char*:errors::
 PySys_AddWarnOption:void:::
 PySys_AddWarnOption:char*:s::
 
-PySys_AddXOption:void:::
-PySys_AddXOption:const wchar_t*:s::
-
 PySys_GetFile:FILE*:::
 PySys_GetFile:char*:name::
 PySys_GetFile:FILE*:def::
 
 PySys_GetObject:PyObject*::0:
 PySys_GetObject:char*:name::
-
-PySys_GetXOptions:PyObject*::0:
 
 PySys_SetArgv:int:::
 PySys_SetArgv:int:argc::
@@ -1742,6 +1698,11 @@ Py_FdIsInteractive:char*:filename::
 
 Py_Finalize:void:::
 
+Py_FindMethod:PyObject*::+1:
+Py_FindMethod:PyMethodDef[]:methods::
+Py_FindMethod:PyObject*:self:+1:
+Py_FindMethod:char*:name::
+
 Py_GetBuildInfoconst:char*:::
 
 Py_GetCompilerconst:char*:::
@@ -1791,6 +1752,9 @@ _PyImport_FixupExtension:char*:::
 _PyImport_FixupExtension:char*:::
 
 _PyImport_Init:void:::
+
+_PyObject_Del:void:::
+_PyObject_Del:PyObject*:op:0:
 
 _PyObject_New:PyObject*::+1:
 _PyObject_New:PyTypeObject*:type:0:

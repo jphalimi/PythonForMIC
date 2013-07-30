@@ -14,12 +14,11 @@ Using make
 Luckily, a Makefile has been prepared so that on Unix, provided you have
 installed Python and Subversion, you can just run ::
 
-   cd Doc
    make html
 
-to check out the necessary toolset in the :file:`tools/` subdirectory and build
-the HTML output files.  To view the generated HTML, point your favorite browser
-at the top-level index :file:`build/html/index.html` after running "make".
+to check out the necessary toolset in the `tools/` subdirectory and build the
+HTML output files.  To view the generated HTML, point your favorite browser at
+the top-level index `build/html/index.html` after running "make".
 
 Available make targets are:
 
@@ -50,10 +49,10 @@ Available make targets are:
 
  * "pydoc-topics", which builds a Python module containing a dictionary with
    plain text documentation for the labels defined in
-   :file:`tools/sphinxext/pyspecific.py` -- pydoc needs these to show topic and
+   `tools/sphinxext/pyspecific.py` -- pydoc needs these to show topic and
    keyword help.
 
-A "make update" updates the Subversion checkouts in :file:`tools/`.
+A "make update" updates the Subversion checkouts in `tools/`.
 
 
 Without make

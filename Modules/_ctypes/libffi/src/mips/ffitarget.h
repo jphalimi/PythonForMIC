@@ -28,10 +28,7 @@
 #define LIBFFI_TARGET_H
 
 #ifdef linux
-# include <asm/sgidefs.h>
-#else
-# include <sgidefs.h>
-#endif
+#include <asm/sgidefs.h>
 #  ifndef _ABIN32
 #    define _ABIN32 _MIPS_SIM_NABI32
 #  endif
@@ -41,6 +38,7 @@
 #  ifndef _ABIO32
 #    define _ABIO32 _MIPS_SIM_ABI32
 #  endif
+#endif
 
 #if !defined(_MIPS_SIM)
 -- something is very wrong --
@@ -97,15 +95,6 @@
 #define FFI_TYPE_STRUCT_DF     189
 #define FFI_TYPE_STRUCT_SMALL  93
 #define FFI_TYPE_STRUCT_SMALL2 109
-
-/* and for n32 soft float, add 16 * 2^4 */
-#define FFI_TYPE_STRUCT_D_SOFT      317
-#define FFI_TYPE_STRUCT_F_SOFT      301
-#define FFI_TYPE_STRUCT_DD_SOFT     509
-#define FFI_TYPE_STRUCT_FF_SOFT     429
-#define FFI_TYPE_STRUCT_FD_SOFT     493
-#define FFI_TYPE_STRUCT_DF_SOFT     445
-#define FFI_TYPE_STRUCT_SOFT        16
 #endif
 
 #ifdef LIBFFI_ASM
@@ -156,8 +145,7 @@
 # endif /* _MIPS_SIM==_ABI64 */
 #endif /* !FFI_MIPS_O32 */
 #else /* !LIBFFI_ASM */
-# ifdef __GNUC__
-#  ifdef FFI_MIPS_O32
+#ifdef FFI_MIPS_O32
 /* O32 stack frames have 32bit integer args */
 typedef unsigned int     ffi_arg __attribute__((__mode__(__SI__)));
 typedef signed   int     ffi_sarg __attribute__((__mode__(__SI__)));
@@ -165,18 +153,7 @@ typedef signed   int     ffi_sarg __attribute__((__mode__(__SI__)));
 /* N32 and N64 frames have 64bit integer args */
 typedef unsigned int     ffi_arg __attribute__((__mode__(__DI__)));
 typedef signed   int     ffi_sarg __attribute__((__mode__(__DI__)));
-#  endif
-# else
-#  ifdef FFI_MIPS_O32
-/* O32 stack frames have 32bit integer args */
-typedef __uint32_t ffi_arg;
-typedef __int32_t ffi_sarg;
-#  else
-/* N32 and N64 frames have 64bit integer args */
-typedef __uint64_t ffi_arg;
-typedef __int64_t ffi_sarg;
-#  endif
-# endif /* __GNUC__ */
+#endif
 
 typedef enum ffi_abi {
   FFI_FIRST_ABI = 0,
@@ -184,8 +161,6 @@ typedef enum ffi_abi {
   FFI_N32,
   FFI_N64,
   FFI_O32_SOFT_FLOAT,
-  FFI_N32_SOFT_FLOAT,
-  FFI_N64_SOFT_FLOAT,
 
 #ifdef FFI_MIPS_O32
 #ifdef __mips_soft_float
@@ -195,17 +170,9 @@ typedef enum ffi_abi {
 #endif
 #else
 # if _MIPS_SIM==_ABI64
-#  ifdef __mips_soft_float
-  FFI_DEFAULT_ABI = FFI_N64_SOFT_FLOAT,
-#  else
   FFI_DEFAULT_ABI = FFI_N64,
-#  endif
 # else
-#  ifdef __mips_soft_float
-  FFI_DEFAULT_ABI = FFI_N32_SOFT_FLOAT,
-#  else
   FFI_DEFAULT_ABI = FFI_N32,
-#  endif
 # endif
 #endif
 

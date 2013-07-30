@@ -34,7 +34,7 @@
 /* ffi_prep_args is called by the assembly routine once stack space
    has been allocated for the function's arguments */
 
-extern void Py_FatalError(const char *msg);
+extern void Py_FatalError(char *msg);
 
 /*@-exportheader@*/
 void ffi_prep_args(char *stack, extended_cif *ecif)
@@ -110,7 +110,7 @@ void ffi_prep_args(char *stack, extended_cif *ecif)
       argp += z;
     }
 
-  if (argp >= stack && (unsigned)(argp - stack) > ecif->cif->bytes) 
+  if (argp - stack > ecif->cif->bytes) 
     {
       Py_FatalError("FFI BUG: not enough stack space for arguments");
     }
@@ -148,12 +148,27 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 }
 
 #ifdef _WIN32
+/*@-declundef@*/
+/*@-exportheader@*/
 extern int
-ffi_call_x86(void (*)(char *, extended_cif *), 
-	     /*@out@*/ extended_cif *, 
-	     unsigned, unsigned, 
-	     /*@out@*/ unsigned *, 
-	     void (*fn)());
+ffi_call_SYSV(void (*)(char *, extended_cif *), 
+	      /*@out@*/ extended_cif *, 
+	      unsigned, unsigned, 
+	      /*@out@*/ unsigned *, 
+	      void (*fn)());
+/*@=declundef@*/
+/*@=exportheader@*/
+
+/*@-declundef@*/
+/*@-exportheader@*/
+extern int
+ffi_call_STDCALL(void (*)(char *, extended_cif *),
+		 /*@out@*/ extended_cif *,
+		 unsigned, unsigned,
+		 /*@out@*/ unsigned *,
+		 void (*fn)());
+/*@=declundef@*/
+/*@=exportheader@*/
 #endif
 
 #ifdef _WIN64
@@ -194,9 +209,17 @@ ffi_call(/*@dependent@*/ ffi_cif *cif,
     {
 #if !defined(_WIN64)
     case FFI_SYSV:
+      /*@-usedef@*/
+      return ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, 
+			   cif->flags, ecif.rvalue, fn);
+      /*@=usedef@*/
+      break;
+
     case FFI_STDCALL:
-      return ffi_call_x86(ffi_prep_args, &ecif, cif->bytes, 
-			  cif->flags, ecif.rvalue, fn);
+      /*@-usedef@*/
+      return ffi_call_STDCALL(ffi_prep_args, &ecif, cif->bytes,
+			      cif->flags, ecif.rvalue, fn);
+      /*@=usedef@*/
       break;
 #else
     case FFI_SYSV:
@@ -371,16 +394,15 @@ ffi_prep_incoming_args_SYSV(char *stack, void **rvalue,
 extern void ffi_closure_OUTER();
 
 ffi_status
-ffi_prep_closure_loc (ffi_closure* closure,
-					  ffi_cif* cif,
-					  void (*fun)(ffi_cif*,void*,void**,void*),
-					  void *user_data,
-					  void *codeloc)
+ffi_prep_closure (ffi_closure* closure,
+		  ffi_cif* cif,
+		  void (*fun)(ffi_cif*,void*,void**,void*),
+		  void *user_data)
 {
   short bytes;
   char *tramp;
 #ifdef _WIN64
-  int mask = 0;
+  int mask;
 #endif
   FFI_ASSERT (cif->abi == FFI_SYSV);
   
@@ -453,5 +475,6 @@ ffi_prep_closure_loc (ffi_closure* closure,
   closure->cif  = cif;
   closure->user_data = user_data;
   closure->fun  = fun;
+
   return FFI_OK;
 }

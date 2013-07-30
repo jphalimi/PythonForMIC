@@ -2,57 +2,25 @@
 
 import sys
 from functools import wraps
-from warnings import warn
 
-__all__ = ["contextmanager", "closing", "ContextDecorator"]
+__all__ = ["contextmanager", "nested", "closing"]
 
-
-class ContextDecorator(object):
-    "A base class or mixin that enables context managers to work as decorators."
-
-    def _recreate_cm(self):
-        """Return a recreated instance of self.
-
-        Allows otherwise one-shot context managers like
-        _GeneratorContextManager to support use as
-        decorators via implicit recreation.
-
-        Note: this is a private interface just for _GCM in 3.2 but will be
-        renamed and documented for third party use in 3.3
-        """
-        return self
-
-    def __call__(self, func):
-        @wraps(func)
-        def inner(*args, **kwds):
-            with self._recreate_cm():
-                return func(*args, **kwds)
-        return inner
-
-
-class _GeneratorContextManager(ContextDecorator):
+class GeneratorContextManager(object):
     """Helper for @contextmanager decorator."""
 
-    def __init__(self, func, *args, **kwds):
-        self.gen = func(*args, **kwds)
-        self.func, self.args, self.kwds = func, args, kwds
-
-    def _recreate_cm(self):
-        # _GCM instances are one-shot context managers, so the
-        # CM must be recreated each time a decorated function is
-        # called
-        return self.__class__(self.func, *self.args, **self.kwds)
+    def __init__(self, gen):
+        self.gen = gen
 
     def __enter__(self):
         try:
-            return next(self.gen)
+            return self.gen.next()
         except StopIteration:
             raise RuntimeError("generator didn't yield")
 
     def __exit__(self, type, value, traceback):
         if type is None:
             try:
-                next(self.gen)
+                self.gen.next()
             except StopIteration:
                 return
             else:
@@ -65,7 +33,7 @@ class _GeneratorContextManager(ContextDecorator):
             try:
                 self.gen.throw(type, value, traceback)
                 raise RuntimeError("generator didn't stop after throw()")
-            except StopIteration as exc:
+            except StopIteration, exc:
                 # Suppress the exception *unless* it's the same exception that
                 # was passed to throw().  This prevents a StopIteration
                 # raised inside the "with" statement from being suppressed
@@ -112,8 +80,52 @@ def contextmanager(func):
     """
     @wraps(func)
     def helper(*args, **kwds):
-        return _GeneratorContextManager(func, *args, **kwds)
+        return GeneratorContextManager(func(*args, **kwds))
     return helper
+
+
+@contextmanager
+def nested(*managers):
+    """Support multiple context managers in a single with-statement.
+
+    Code like this:
+
+        with nested(A, B, C) as (X, Y, Z):
+            <body>
+
+    is equivalent to this:
+
+        with A as X:
+            with B as Y:
+                with C as Z:
+                    <body>
+
+    """
+    exits = []
+    vars = []
+    exc = (None, None, None)
+    try:
+        for mgr in managers:
+            exit = mgr.__exit__
+            enter = mgr.__enter__
+            vars.append(enter())
+            exits.append(exit)
+        yield vars
+    except:
+        exc = sys.exc_info()
+    finally:
+        while exits:
+            exit = exits.pop()
+            try:
+                if exit(*exc):
+                    exc = (None, None, None)
+            except:
+                exc = sys.exc_info()
+        if exc != (None, None, None):
+            # Don't rely on sys.exc_info() still containing
+            # the right information. Another exception may
+            # have been raised and caught by an exit method
+            raise exc[0], exc[1], exc[2]
 
 
 class closing(object):

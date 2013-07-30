@@ -108,13 +108,6 @@ PyAPI_FUNC(void) _PyObject_DebugFree(void *p);
 PyAPI_FUNC(void) _PyObject_DebugDumpAddress(const void *p);
 PyAPI_FUNC(void) _PyObject_DebugCheckAddress(const void *p);
 PyAPI_FUNC(void) _PyObject_DebugMallocStats(void);
-PyAPI_FUNC(void *) _PyObject_DebugMallocApi(char api, size_t nbytes);
-PyAPI_FUNC(void *) _PyObject_DebugReallocApi(char api, void *p, size_t nbytes);
-PyAPI_FUNC(void) _PyObject_DebugFreeApi(char api, void *p);
-PyAPI_FUNC(void) _PyObject_DebugCheckAddressApi(char api, const void *p);
-PyAPI_FUNC(void *) _PyMem_DebugMalloc(size_t nbytes);
-PyAPI_FUNC(void *) _PyMem_DebugRealloc(void *p, size_t nbytes);
-PyAPI_FUNC(void) _PyMem_DebugFree(void *p);
 #define PyObject_MALLOC         _PyObject_DebugMalloc
 #define PyObject_Malloc         _PyObject_DebugMalloc
 #define PyObject_REALLOC        _PyObject_DebugRealloc
@@ -137,6 +130,9 @@ PyAPI_FUNC(void) _PyMem_DebugFree(void *p);
 
 #define PyObject_Del            PyObject_Free
 #define PyObject_DEL            PyObject_FREE
+
+/* for source compatibility with 2.2 */
+#define _PyObject_Del           PyObject_Free
 
 /*
  * Generic object allocator interface
@@ -242,8 +238,10 @@ PyAPI_FUNC(PyVarObject *) _PyObject_GC_Resize(PyVarObject *, Py_ssize_t);
 #define PyObject_GC_Resize(type, op, n) \
                 ( (type *) _PyObject_GC_Resize((PyVarObject *)(op), (n)) )
 
+/* for source compatibility with 2.2 */
+#define _PyObject_GC_Del PyObject_GC_Del
+
 /* GC information is stored BEFORE the object structure. */
-#ifndef Py_LIMITED_API
 typedef union _gc_head {
     struct {
         union _gc_head *gc_next;
@@ -287,17 +285,6 @@ extern PyGC_Head *_PyGC_generation0;
     g->gc.gc_next = NULL; \
     } while (0);
 
-/* True if the object is currently tracked by the GC. */
-#define _PyObject_GC_IS_TRACKED(o) \
-    ((_Py_AS_GC(o))->gc.gc_refs != _PyGC_REFS_UNTRACKED)
-
-/* True if the object may be tracked by the GC in the future, or already is.
-   This can be useful to implement some optimizations. */
-#define _PyObject_GC_MAY_BE_TRACKED(obj) \
-    (PyObject_IS_GC(obj) && \
-        (!PyTuple_CheckExact(obj) || _PyObject_GC_IS_TRACKED(obj)))
-#endif /* Py_LIMITED_API */
-
 PyAPI_FUNC(PyObject *) _PyObject_GC_Malloc(size_t);
 PyAPI_FUNC(PyObject *) _PyObject_GC_New(PyTypeObject *);
 PyAPI_FUNC(PyVarObject *) _PyObject_GC_NewVar(PyTypeObject *, Py_ssize_t);
@@ -325,9 +312,20 @@ PyAPI_FUNC(void) PyObject_GC_Del(void *);
         }                                                               \
     } while (0)
 
+/* This is here for the sake of backwards compatibility.  Extensions that
+ * use the old GC API will still compile but the objects will not be
+ * tracked by the GC. */
+#define PyGC_HEAD_SIZE 0
+#define PyObject_GC_Init(op)
+#define PyObject_GC_Fini(op)
+#define PyObject_AS_GC(op) (op)
+#define PyObject_FROM_GC(op) (op)
+
 
 /* Test if a type supports weak references */
-#define PyType_SUPPORTS_WEAKREFS(t) ((t)->tp_weaklistoffset > 0)
+#define PyType_SUPPORTS_WEAKREFS(t) \
+    (PyType_HasFeature((t), Py_TPFLAGS_HAVE_WEAKREFS) \
+     && ((t)->tp_weaklistoffset > 0))
 
 #define PyObject_GET_WEAKREFS_LISTPTR(o) \
     ((PyObject **) (((char *) (o)) + Py_TYPE(o)->tp_weaklistoffset))

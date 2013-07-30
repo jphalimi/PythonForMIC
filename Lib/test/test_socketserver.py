@@ -1,28 +1,28 @@
 """
-Test suite for socketserver.
+Test suite for SocketServer.py.
 """
 
 import contextlib
+import errno
 import imp
 import os
 import select
 import signal
 import socket
 import tempfile
+import threading
+import time
 import unittest
-import socketserver
+import SocketServer
 
-import test.support
-from test.support import reap_children, reap_threads, verbose
-try:
-    import threading
-except ImportError:
-    threading = None
+import test.test_support
+from test.test_support import reap_children, verbose, TestSkipped
+from test.test_support import TESTFN as TEST_FILE
 
-test.support.requires("network")
+test.test_support.requires("network")
 
-TEST_STR = b"hello world\n"
-HOST = test.support.HOST
+TEST_STR = "hello world\n"
+HOST = test.test_support.HOST
 
 HAVE_UNIX_SOCKETS = hasattr(socket, "AF_UNIX")
 HAVE_FORKING = hasattr(os, "fork") and os.name != "os2"
@@ -37,15 +37,15 @@ def receive(sock, n, timeout=20):
     if sock in r:
         return sock.recv(n)
     else:
-        raise RuntimeError("timed out on %r" % (sock,))
+        raise RuntimeError, "timed out on %r" % (sock,)
 
 if HAVE_UNIX_SOCKETS:
-    class ForkingUnixStreamServer(socketserver.ForkingMixIn,
-                                  socketserver.UnixStreamServer):
+    class ForkingUnixStreamServer(SocketServer.ForkingMixIn,
+                                  SocketServer.UnixStreamServer):
         pass
 
-    class ForkingUnixDatagramServer(socketserver.ForkingMixIn,
-                                    socketserver.UnixDatagramServer):
+    class ForkingUnixDatagramServer(SocketServer.ForkingMixIn,
+                                    SocketServer.UnixDatagramServer):
         pass
 
 
@@ -57,16 +57,15 @@ def simple_subprocess(testcase):
         os._exit(72)
     yield None
     pid2, status = os.waitpid(pid, 0)
-    testcase.assertEqual(pid2, pid)
-    testcase.assertEqual(72 << 8, status)
+    testcase.assertEquals(pid2, pid)
+    testcase.assertEquals(72 << 8, status)
 
 
-@unittest.skipUnless(threading, 'Threading required for this test.')
 class SocketServerTest(unittest.TestCase):
     """Test all socket servers."""
 
     def setUp(self):
-        signal_alarm(60)  # Kill deadlocks after 60 seconds.
+        signal_alarm(20)  # Kill deadlocks after 20 seconds.
         self.port_seed = 0
         self.test_files = []
 
@@ -118,13 +117,11 @@ class SocketServerTest(unittest.TestCase):
                 line = self.rfile.readline()
                 self.wfile.write(line)
 
-        if verbose: print("creating server")
+        if verbose: print "creating server"
         server = MyServer(addr, MyHandler)
-        self.assertEqual(server.server_address, server.socket.getsockname())
+        self.assertEquals(server.server_address, server.socket.getsockname())
         return server
 
-    @unittest.skipUnless(threading, 'Threading required for this test.')
-    @reap_threads
     def run_server(self, svrcls, hdlrbase, testfunc):
         server = self.make_server(self.pickaddr(svrcls.address_family),
                                   svrcls, hdlrbase)
@@ -132,9 +129,9 @@ class SocketServerTest(unittest.TestCase):
         # the server.
         addr = server.server_address
         if verbose:
-            print("ADDR =", addr)
-            print("CLASS =", svrcls)
-
+            print "server created"
+            print "ADDR =", addr
+            print "CLASS =", svrcls
         t = threading.Thread(
             name='%s serving' % svrcls,
             target=server.serve_forever,
@@ -144,87 +141,86 @@ class SocketServerTest(unittest.TestCase):
             kwargs={'poll_interval':0.01})
         t.daemon = True  # In case this function raises.
         t.start()
-        if verbose: print("server running")
+        if verbose: print "server running"
         for i in range(3):
-            if verbose: print("test client", i)
+            if verbose: print "test client", i
             testfunc(svrcls.address_family, addr)
-        if verbose: print("waiting for server")
+        if verbose: print "waiting for server"
         server.shutdown()
         t.join()
-        server.server_close()
-        if verbose: print("done")
+        if verbose: print "done"
 
     def stream_examine(self, proto, addr):
         s = socket.socket(proto, socket.SOCK_STREAM)
         s.connect(addr)
         s.sendall(TEST_STR)
         buf = data = receive(s, 100)
-        while data and b'\n' not in buf:
+        while data and '\n' not in buf:
             data = receive(s, 100)
             buf += data
-        self.assertEqual(buf, TEST_STR)
+        self.assertEquals(buf, TEST_STR)
         s.close()
 
     def dgram_examine(self, proto, addr):
         s = socket.socket(proto, socket.SOCK_DGRAM)
         s.sendto(TEST_STR, addr)
         buf = data = receive(s, 100)
-        while data and b'\n' not in buf:
+        while data and '\n' not in buf:
             data = receive(s, 100)
             buf += data
-        self.assertEqual(buf, TEST_STR)
+        self.assertEquals(buf, TEST_STR)
         s.close()
 
     def test_TCPServer(self):
-        self.run_server(socketserver.TCPServer,
-                        socketserver.StreamRequestHandler,
+        self.run_server(SocketServer.TCPServer,
+                        SocketServer.StreamRequestHandler,
                         self.stream_examine)
 
     def test_ThreadingTCPServer(self):
-        self.run_server(socketserver.ThreadingTCPServer,
-                        socketserver.StreamRequestHandler,
+        self.run_server(SocketServer.ThreadingTCPServer,
+                        SocketServer.StreamRequestHandler,
                         self.stream_examine)
 
     if HAVE_FORKING:
         def test_ForkingTCPServer(self):
             with simple_subprocess(self):
-                self.run_server(socketserver.ForkingTCPServer,
-                                socketserver.StreamRequestHandler,
+                self.run_server(SocketServer.ForkingTCPServer,
+                                SocketServer.StreamRequestHandler,
                                 self.stream_examine)
 
     if HAVE_UNIX_SOCKETS:
         def test_UnixStreamServer(self):
-            self.run_server(socketserver.UnixStreamServer,
-                            socketserver.StreamRequestHandler,
+            self.run_server(SocketServer.UnixStreamServer,
+                            SocketServer.StreamRequestHandler,
                             self.stream_examine)
 
         def test_ThreadingUnixStreamServer(self):
-            self.run_server(socketserver.ThreadingUnixStreamServer,
-                            socketserver.StreamRequestHandler,
+            self.run_server(SocketServer.ThreadingUnixStreamServer,
+                            SocketServer.StreamRequestHandler,
                             self.stream_examine)
 
         if HAVE_FORKING:
             def test_ForkingUnixStreamServer(self):
                 with simple_subprocess(self):
                     self.run_server(ForkingUnixStreamServer,
-                                    socketserver.StreamRequestHandler,
+                                    SocketServer.StreamRequestHandler,
                                     self.stream_examine)
 
     def test_UDPServer(self):
-        self.run_server(socketserver.UDPServer,
-                        socketserver.DatagramRequestHandler,
+        self.run_server(SocketServer.UDPServer,
+                        SocketServer.DatagramRequestHandler,
                         self.dgram_examine)
 
     def test_ThreadingUDPServer(self):
-        self.run_server(socketserver.ThreadingUDPServer,
-                        socketserver.DatagramRequestHandler,
+        self.run_server(SocketServer.ThreadingUDPServer,
+                        SocketServer.DatagramRequestHandler,
                         self.dgram_examine)
 
     if HAVE_FORKING:
         def test_ForkingUDPServer(self):
             with simple_subprocess(self):
-                self.run_server(socketserver.ForkingUDPServer,
-                                socketserver.DatagramRequestHandler,
+                self.run_server(SocketServer.ForkingUDPServer,
+                                SocketServer.DatagramRequestHandler,
                                 self.dgram_examine)
 
     # Alas, on Linux (at least) recvfrom() doesn't return a meaningful
@@ -232,29 +228,28 @@ class SocketServerTest(unittest.TestCase):
 
     # if HAVE_UNIX_SOCKETS:
     #     def test_UnixDatagramServer(self):
-    #         self.run_server(socketserver.UnixDatagramServer,
-    #                         socketserver.DatagramRequestHandler,
+    #         self.run_server(SocketServer.UnixDatagramServer,
+    #                         SocketServer.DatagramRequestHandler,
     #                         self.dgram_examine)
     #
     #     def test_ThreadingUnixDatagramServer(self):
-    #         self.run_server(socketserver.ThreadingUnixDatagramServer,
-    #                         socketserver.DatagramRequestHandler,
+    #         self.run_server(SocketServer.ThreadingUnixDatagramServer,
+    #                         SocketServer.DatagramRequestHandler,
     #                         self.dgram_examine)
     #
     #     if HAVE_FORKING:
     #         def test_ForkingUnixDatagramServer(self):
-    #             self.run_server(socketserver.ForkingUnixDatagramServer,
-    #                             socketserver.DatagramRequestHandler,
+    #             self.run_server(SocketServer.ForkingUnixDatagramServer,
+    #                             SocketServer.DatagramRequestHandler,
     #                             self.dgram_examine)
 
-    @reap_threads
     def test_shutdown(self):
         # Issue #2302: shutdown() should always succeed in making an
         # other thread leave serve_forever().
-        class MyServer(socketserver.TCPServer):
+        class MyServer(SocketServer.TCPServer):
             pass
 
-        class MyHandler(socketserver.StreamRequestHandler):
+        class MyHandler(SocketServer.StreamRequestHandler):
             pass
 
         threads = []
@@ -271,15 +266,15 @@ class SocketServerTest(unittest.TestCase):
             s.shutdown()
         for t, s in threads:
             t.join()
-            s.server_close()
 
 
 def test_main():
     if imp.lock_held():
         # If the import lock is held, the threads will hang
-        raise unittest.SkipTest("can't run when import lock is held")
+        raise TestSkipped("can't run when import lock is held")
 
-    test.support.run_unittest(SocketServerTest)
+    test.test_support.run_unittest(SocketServerTest)
 
 if __name__ == "__main__":
     test_main()
+    signal_alarm(3)  # Shutdown shouldn't take more than 3 seconds.

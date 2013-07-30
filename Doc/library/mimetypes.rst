@@ -1,3 +1,4 @@
+
 :mod:`mimetypes` --- Map filenames to MIME types
 ================================================
 
@@ -7,10 +8,6 @@
 
 
 .. index:: pair: MIME; content type
-
-**Source code:** :source:`Lib/mimetypes.py`
-
---------------
 
 The :mod:`mimetypes` module converts between a filename or URL and the MIME type
 associated with the filename extension.  Conversions are provided from filename
@@ -26,7 +23,7 @@ the module has not been initialized, they will call :func:`init` if they rely on
 the information :func:`init` sets up.
 
 
-.. function:: guess_type(url, strict=True)
+.. function:: guess_type(filename[, strict])
 
    .. index:: pair: MIME; headers
 
@@ -50,7 +47,7 @@ the information :func:`init` sets up.
    are also recognized.
 
 
-.. function:: guess_all_extensions(type, strict=True)
+.. function:: guess_all_extensions(type[, strict])
 
    Guess the extensions for a file based on its MIME type, given by *type*. The
    return value is a list of strings giving all possible filename extensions,
@@ -61,7 +58,7 @@ the information :func:`init` sets up.
    Optional *strict* has the same meaning as with the :func:`guess_type` function.
 
 
-.. function:: guess_extension(type, strict=True)
+.. function:: guess_extension(type[, strict])
 
    Guess the extension for a file based on its MIME type, given by *type*. The
    return value is a string giving a filename extension, including the leading dot
@@ -76,17 +73,13 @@ Some additional functions and data items are available for controlling the
 behavior of the module.
 
 
-.. function:: init(files=None)
+.. function:: init([files])
 
    Initialize the internal data structures.  If given, *files* must be a sequence
    of file names which should be used to augment the default type map.  If omitted,
-   the file names to use are taken from :const:`knownfiles`; on Windows, the
-   current registry settings are loaded.  Each file named in *files* or
-   :const:`knownfiles` takes precedence over those named before it.  Calling
-   :func:`init` repeatedly is allowed.
-
-   .. versionchanged:: 3.2
-      Previously, Windows registry settings were ignored.
+   the file names to use are taken from :const:`knownfiles`.  Each file named in
+   *files* or :const:`knownfiles` takes precedence over those named before it.
+   Calling :func:`init` repeatedly is allowed.
 
 
 .. function:: read_mime_types(filename)
@@ -97,7 +90,7 @@ behavior of the module.
    does not exist or cannot be read, ``None`` is returned.
 
 
-.. function:: add_type(type, ext, strict=True)
+.. function:: add_type(type, ext[, strict])
 
    Add a mapping from the mimetype *type* to the extension *ext*. When the
    extension is already known, the new type will replace the old one. When the type
@@ -149,7 +142,7 @@ The :class:`MimeTypes` class may be useful for applications which may want more
 than one MIME-type database:
 
 
-.. class:: MimeTypes(filenames=(), strict=True)
+.. class:: MimeTypes([filenames])
 
    This class represents a MIME-types database.  By default, it provides access to
    the same database as the rest of this module. The initial database is a copy of
@@ -161,6 +154,7 @@ than one MIME-type database:
    The optional *filenames* parameter can be used to cause additional files to be
    loaded "on top" of the default database.
 
+   .. versionadded:: 2.2
 
 An example usage of the module::
 
@@ -213,13 +207,13 @@ MimeTypes Objects
    module.
 
 
-.. method:: MimeTypes.guess_extension(type, strict=True)
+.. method:: MimeTypes.guess_extension(type[, strict])
 
    Similar to the :func:`guess_extension` function, using the tables stored as part
    of the object.
 
 
-.. method:: MimeTypes.guess_type(url, strict=True)
+.. method:: MimeTypes.guess_type(url[, strict])
 
    Similar to the :func:`guess_type` function, using the tables stored as part of
    the object.
@@ -236,9 +230,3 @@ MimeTypes Objects
    Load MIME type information from an open file.  The file must have the format of
    the standard :file:`mime.types` files.
 
-
-.. method:: MimeTypes.read_windows_registry()
-
-   Load MIME type information from the Windows registry.  Availability: Windows.
-
-   .. versionadded:: 3.2

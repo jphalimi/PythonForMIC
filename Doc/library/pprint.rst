@@ -1,3 +1,4 @@
+
 :mod:`pprint` --- Data pretty printer
 =====================================
 
@@ -6,9 +7,6 @@
 .. moduleauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 .. sectionauthor:: Fred L. Drake, Jr. <fdrake@acm.org>
 
-**Source code:** :source:`Lib/pprint.py`
-
---------------
 
 The :mod:`pprint` module provides a capability to "pretty-print" arbitrary
 Python data structures in a form which can be used as input to the interpreter.
@@ -22,14 +20,20 @@ breaks them onto multiple lines if they don't fit within the allowed width.
 Construct :class:`PrettyPrinter` objects explicitly if you need to adjust the
 width constraint.
 
-Dictionaries are sorted by key before the display is computed.
+.. versionchanged:: 2.5
+   Dictionaries are sorted by key before the display is computed; before 2.5, a
+   dictionary was sorted only if its display required more than one line, although
+   that wasn't documented.
+
+.. versionchanged:: 2.6
+   Added support for :class:`set` and :class:`frozenset`.
 
 The :mod:`pprint` module defines one class:
 
 .. First the implementation class:
 
 
-.. class:: PrettyPrinter(indent=1, width=80, depth=None, stream=None)
+.. class:: PrettyPrinter(...)
 
    Construct a :class:`PrettyPrinter` instance.  This constructor understands
    several keyword parameters.  An output stream may be set using the *stream*
@@ -64,23 +68,26 @@ The :mod:`pprint` module defines one class:
       >>> pp.pprint(tup)
       ('spam', ('eggs', ('lumberjack', ('knights', ('ni', ('dead', (...)))))))
 
-
 The :class:`PrettyPrinter` class supports several derivative functions:
 
-.. function:: pformat(object, indent=1, width=80, depth=None)
+.. Now the derivative functions:
+
+.. function:: pformat(object[, indent[, width[, depth]]])
 
    Return the formatted representation of *object* as a string.  *indent*, *width*
    and *depth* will be passed to the :class:`PrettyPrinter` constructor as
    formatting parameters.
 
+   .. versionchanged:: 2.4
+      The parameters *indent*, *width* and *depth* were added.
 
-.. function:: pprint(object, stream=None, indent=1, width=80, depth=None)
+
+.. function:: pprint(object[, stream[, indent[, width[, depth]]]])
 
    Prints the formatted representation of *object* on *stream*, followed by a
-   newline.  If *stream* is ``None``, ``sys.stdout`` is used.  This may be used
-   in the interactive interpreter instead of the :func:`print` function for
-   inspecting values (you can even reassign ``print = pprint.pprint`` for use
-   within a scope).  *indent*, *width* and *depth* will be passed to the
+   newline.  If *stream* is omitted, ``sys.stdout`` is used.  This may be used in
+   the interactive interpreter instead of a :keyword:`print` statement for
+   inspecting values.    *indent*, *width* and *depth* will be passed to the
    :class:`PrettyPrinter` constructor as formatting parameters.
 
       >>> import pprint
@@ -93,6 +100,9 @@ The :class:`PrettyPrinter` class supports several derivative functions:
        'lumberjack',
        'knights',
        'ni']
+
+   .. versionchanged:: 2.4
+      The parameters *indent*, *width* and *depth* were added.
 
 
 .. function:: isreadable(object)
@@ -186,108 +196,40 @@ are converted to strings.  The default implementation uses the internals of the
    calls. The fourth argument, *level*, gives the current level; recursive calls
    should be passed a value less than that of the current call.
 
+   .. versionadded:: 2.3
 
 .. _pprint-example:
 
-Example
--------
+pprint Example
+--------------
 
-To demonstrate several uses of the :func:`pprint` function and its parameters,
-let's fetch information about a project from PyPI::
+This example demonstrates several uses of the :func:`pprint` function and its parameters.
 
-   >>> import json
    >>> import pprint
-   >>> from urllib.request import urlopen
-   >>> with urlopen('http://pypi.python.org/pypi/configparser/json') as url:
-   ...     http_info = url.info()
-   ...     raw_data = url.read().decode(http_info.get_content_charset())
-   >>> project_info = json.loads(raw_data)
-   >>> result = {'headers': http_info.items(), 'body': project_info}
+   >>> tup = ('spam', ('eggs', ('lumberjack', ('knights', ('ni', ('dead',
+   ... ('parrot', ('fresh fruit',))))))))
+   >>> stuff = ['a' * 10, tup, ['a' * 30, 'b' * 30], ['c' * 20, 'd' * 20]]
+   >>> pprint.pprint(stuff)
+   ['aaaaaaaaaa',
+    ('spam',
+     ('eggs',
+      ('lumberjack',
+       ('knights', ('ni', ('dead', ('parrot', ('fresh fruit',)))))))),
+    ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    ['cccccccccccccccccccc', 'dddddddddddddddddddd']]
+   >>> pprint.pprint(stuff, depth=3)
+   ['aaaaaaaaaa',
+    ('spam', ('eggs', (...))),
+    ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    ['cccccccccccccccccccc', 'dddddddddddddddddddd']]
+   >>> pprint.pprint(stuff, width=60)
+   ['aaaaaaaaaa',
+    ('spam',
+     ('eggs',
+      ('lumberjack',
+       ('knights',
+        ('ni', ('dead', ('parrot', ('fresh fruit',)))))))),
+    ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    ['cccccccccccccccccccc', 'dddddddddddddddddddd']]
 
-In its basic form, :func:`pprint` shows the whole object::
-
-   >>> pprint.pprint(result)
-   {'body': {'info': {'_pypi_hidden': False,
-                      '_pypi_ordering': 12,
-                      'classifiers': ['Development Status :: 4 - Beta',
-                                      'Intended Audience :: Developers',
-                                      'License :: OSI Approved :: MIT License',
-                                      'Natural Language :: English',
-                                      'Operating System :: OS Independent',
-                                      'Programming Language :: Python',
-                                      'Programming Language :: Python :: 2',
-                                      'Programming Language :: Python :: 2.6',
-                                      'Programming Language :: Python :: 2.7',
-                                      'Topic :: Software Development :: Libraries',
-                                      'Topic :: Software Development :: Libraries :: Python Modules'],
-                      'download_url': 'UNKNOWN',
-                      'home_page': 'http://docs.python.org/py3k/library/configparser.html',
-                      'keywords': 'configparser ini parsing conf cfg configuration file',
-                      'license': 'MIT',
-                      'name': 'configparser',
-                      'package_url': 'http://pypi.python.org/pypi/configparser',
-                      'platform': 'any',
-                      'release_url': 'http://pypi.python.org/pypi/configparser/3.2.0r3',
-                      'requires_python': None,
-                      'stable_version': None,
-                      'summary': 'This library brings the updated configparser from Python 3.2+ to Python 2.6-2.7.',
-                      'version': '3.2.0r3'},
-           'urls': [{'comment_text': '',
-                     'downloads': 47,
-                     'filename': 'configparser-3.2.0r3.tar.gz',
-                     'has_sig': False,
-                     'md5_digest': '8500fd87c61ac0de328fc996fce69b96',
-                     'packagetype': 'sdist',
-                     'python_version': 'source',
-                     'size': 32281,
-                     'upload_time': '2011-05-10T16:28:50',
-                     'url': 'http://pypi.python.org/packages/source/c/configparser/configparser-3.2.0r3.tar.gz'}]},
-   'headers': [('Date', 'Sat, 14 May 2011 12:48:52 GMT'),
-               ('Server', 'Apache/2.2.16 (Debian)'),
-               ('Content-Disposition', 'inline'),
-               ('Connection', 'close'),
-               ('Transfer-Encoding', 'chunked'),
-               ('Content-Type', 'application/json; charset="UTF-8"')]}
-
-The result can be limited to a certain *depth* (ellipsis is used for deeper
-contents)::
-
-   >>> pprint.pprint(result, depth=3)
-   {'body': {'info': {'_pypi_hidden': False,
-                      '_pypi_ordering': 12,
-                      'classifiers': [...],
-                      'download_url': 'UNKNOWN',
-                      'home_page': 'http://docs.python.org/py3k/library/configparser.html',
-                      'keywords': 'configparser ini parsing conf cfg configuration file',
-                      'license': 'MIT',
-                      'name': 'configparser',
-                      'package_url': 'http://pypi.python.org/pypi/configparser',
-                      'platform': 'any',
-                      'release_url': 'http://pypi.python.org/pypi/configparser/3.2.0r3',
-                      'requires_python': None,
-                      'stable_version': None,
-                      'summary': 'This library brings the updated configparser from Python 3.2+ to Python 2.6-2.7.',
-                      'version': '3.2.0r3'},
-           'urls': [{...}]},
-   'headers': [('Date', 'Sat, 14 May 2011 12:48:52 GMT'),
-               ('Server', 'Apache/2.2.16 (Debian)'),
-               ('Content-Disposition', 'inline'),
-               ('Connection', 'close'),
-               ('Transfer-Encoding', 'chunked'),
-               ('Content-Type', 'application/json; charset="UTF-8"')]}
-
-Additionally, maximum *width* can be suggested. If a long object cannot be
-split, the specified width will be exceeded::
-
-   >>> pprint.pprint(result['headers'], width=30)
-   [('Date',
-     'Sat, 14 May 2011 12:48:52 GMT'),
-    ('Server',
-     'Apache/2.2.16 (Debian)'),
-    ('Content-Disposition',
-     'inline'),
-    ('Connection', 'close'),
-    ('Transfer-Encoding',
-     'chunked'),
-    ('Content-Type',
-     'application/json; charset="UTF-8"')]

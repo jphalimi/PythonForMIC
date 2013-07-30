@@ -7,7 +7,6 @@ that name.
 
 import sys
 import os
-import tokenize
 
 __all__ = ["getline", "clearcache", "checkcache"]
 
@@ -46,7 +45,7 @@ def checkcache(filename=None):
     (This is not checked upon each call!)"""
 
     if filename is None:
-        filenames = list(cache.keys())
+        filenames = cache.keys()
     else:
         if filename in cache:
             filenames = [filename]
@@ -73,13 +72,13 @@ def updatecache(filename, module_globals=None):
 
     if filename in cache:
         del cache[filename]
-    if not filename or (filename.startswith('<') and filename.endswith('>')):
+    if not filename or filename[0] + filename[-1] == '<>':
         return []
 
     fullname = filename
     try:
         stat = os.stat(fullname)
-    except OSError:
+    except os.error, msg:
         basename = filename
 
         # Try for a __loader__, if available
@@ -110,22 +109,29 @@ def updatecache(filename, module_globals=None):
             return []
 
         for dirname in sys.path:
+            # When using imputil, sys.path may contain things other than
+            # strings; ignore them when it happens.
             try:
                 fullname = os.path.join(dirname, basename)
             except (TypeError, AttributeError):
                 # Not sufficiently string-like to do anything useful with.
-                continue
-            try:
-                stat = os.stat(fullname)
-                break
-            except os.error:
                 pass
+            else:
+                try:
+                    stat = os.stat(fullname)
+                    break
+                except os.error:
+                    pass
         else:
+            # No luck
+##          print '*** Cannot stat', filename, ':', msg
             return []
     try:
-        with tokenize.open(fullname) as fp:
-            lines = fp.readlines()
-    except IOError:
+        fp = open(fullname, 'rU')
+        lines = fp.readlines()
+        fp.close()
+    except IOError, msg:
+##      print '*** Cannot open', fullname, ':', msg
         return []
     if lines and not lines[-1].endswith('\n'):
         lines[-1] += '\n'

@@ -1,3 +1,4 @@
+
 :mod:`sndhdr` --- Determine type of sound file
 ==============================================
 
@@ -9,10 +10,6 @@
 .. index::
    single: A-LAW
    single: u-LAW
-
-**Source code:** :source:`Lib/sndhdr.py`
-
---------------
 
 The :mod:`sndhdr` provides utility functions which attempt to determine the type
 of sound data which is in a file.  When these functions are able to determine

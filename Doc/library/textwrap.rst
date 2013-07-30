@@ -1,3 +1,4 @@
+
 :mod:`textwrap` --- Text wrapping and filling
 =============================================
 
@@ -6,9 +7,8 @@
 .. moduleauthor:: Greg Ward <gward@python.net>
 .. sectionauthor:: Greg Ward <gward@python.net>
 
-**Source code:** :source:`Lib/textwrap.py`
 
---------------
+.. versionadded:: 2.3
 
 The :mod:`textwrap` module provides two convenience functions, :func:`wrap` and
 :func:`fill`, as well as :class:`TextWrapper`, the class that does all the work,
@@ -16,17 +16,17 @@ and a utility function  :func:`dedent`.  If you're just wrapping or filling one
 or two  text strings, the convenience functions should be good enough;
 otherwise,  you should use an instance of :class:`TextWrapper` for efficiency.
 
-.. function:: wrap(text, width=70, **kwargs)
 
-   Wraps the single paragraph in *text* (a string) so every line is at most
-   *width* characters long.  Returns a list of output lines, without final
-   newlines.
+.. function:: wrap(text[, width[, ...]])
+
+   Wraps the single paragraph in *text* (a string) so every line is at most *width*
+   characters long.  Returns a list of output lines, without final newlines.
 
    Optional keyword arguments correspond to the instance attributes of
    :class:`TextWrapper`, documented below.  *width* defaults to ``70``.
 
 
-.. function:: fill(text, width=70, **kwargs)
+.. function:: fill(text[, width[, ...]])
 
    Wraps the single paragraph in *text*, and returns a single string containing the
    wrapped paragraph.  :func:`fill` is shorthand for  ::
@@ -58,7 +58,9 @@ indentation from strings that have unwanted whitespace to the left of the text.
 
    Note that tabs and spaces are both treated as whitespace, but they are not
    equal: the lines ``"  hello"`` and ``"\thello"`` are considered to have no
-   common leading whitespace.
+   common leading whitespace.  (This behaviour is new in Python 2.5; older versions
+   of this module incorrectly expanded tabs before searching for common leading
+   whitespace.)
 
    For example::
 
@@ -68,15 +70,15 @@ indentation from strings that have unwanted whitespace to the left of the text.
           hello
             world
           '''
-          print(repr(s))          # prints '    hello\n      world\n    '
-          print(repr(dedent(s)))  # prints 'hello\n  world\n'
+          print repr(s)          # prints '    hello\n      world\n    '
+          print repr(dedent(s))  # prints 'hello\n  world\n'
 
 
-.. class:: TextWrapper(**kwargs)
+.. class:: TextWrapper(...)
 
    The :class:`TextWrapper` constructor accepts a number of optional keyword
-   arguments.  Each keyword argument corresponds to an instance attribute, so
-   for example ::
+   arguments.  Each argument corresponds to one instance attribute, so for example
+   ::
 
       wrapper = TextWrapper(initial_indent="* ")
 
@@ -119,19 +121,15 @@ indentation from strings that have unwanted whitespace to the left of the text.
          each tab character will be replaced by a single space, which is *not*
          the same as tab expansion.
 
-      .. note::
-
-         If :attr:`replace_whitespace` is false, newlines may appear in the
-         middle of a line and cause strange output. For this reason, text should
-         be split into paragraphs (using :meth:`str.splitlines` or similar)
-         which are wrapped separately.
-
 
    .. attribute:: drop_whitespace
 
       (default: ``True``) If true, whitespace that, after wrapping, happens to
       end up at the beginning or end of a line is dropped (leading whitespace in
       the first line is always preserved, though).
+
+      .. versionadded:: 2.6
+         Whitespace was always dropped in earlier versions.
 
 
    .. attribute:: initial_indent
@@ -189,6 +187,8 @@ indentation from strings that have unwanted whitespace to the left of the text.
       for line breaks, but you need to set :attr:`break_long_words` to false if
       you want truly insecable words.  Default behaviour in previous versions
       was to always allow breaking hyphenated words.
+
+      .. versionadded:: 2.6
 
 
    :class:`TextWrapper` also provides two public methods, analogous to the

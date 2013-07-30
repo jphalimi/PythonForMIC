@@ -2,18 +2,22 @@
 
 Implements the Distutils 'build' command."""
 
+# This module should be kept compatible with Python 2.1.
+
+__revision__ = "$Id: build.py 62197 2008-04-07 01:53:39Z mark.hammond $"
+
 import sys, os
 from distutils.core import Command
 from distutils.errors import DistutilsOptionError
 from distutils.util import get_platform
 
 
-def show_compilers():
+def show_compilers ():
     from distutils.ccompiler import show_compilers
     show_compilers()
 
 
-class build(Command):
+class build (Command):
 
     description = "build everything needed to install"
 
@@ -51,7 +55,7 @@ class build(Command):
          "list available compilers", show_compilers),
         ]
 
-    def initialize_options(self):
+    def initialize_options (self):
         self.build_base = 'build'
         # these are decided only after 'build_base' has its final value
         # (unless overridden by the user or client)
@@ -66,7 +70,8 @@ class build(Command):
         self.force = 0
         self.executable = None
 
-    def finalize_options(self):
+    def finalize_options (self):
+
         if self.plat_name is None:
             self.plat_name = get_platform()
         else:
@@ -115,8 +120,11 @@ class build(Command):
 
         if self.executable is None:
             self.executable = os.path.normpath(sys.executable)
+    # finalize_options ()
 
-    def run(self):
+
+    def run (self):
+
         # Run all relevant sub-commands.  This will be some subset of:
         #  - build_py      - pure Python modules
         #  - build_clib    - standalone C libraries
@@ -128,16 +136,16 @@ class build(Command):
 
     # -- Predicates for the sub-command list ---------------------------
 
-    def has_pure_modules(self):
+    def has_pure_modules (self):
         return self.distribution.has_pure_modules()
 
-    def has_c_libraries(self):
+    def has_c_libraries (self):
         return self.distribution.has_c_libraries()
 
-    def has_ext_modules(self):
+    def has_ext_modules (self):
         return self.distribution.has_ext_modules()
 
-    def has_scripts(self):
+    def has_scripts (self):
         return self.distribution.has_scripts()
 
 
@@ -146,3 +154,5 @@ class build(Command):
                     ('build_ext',     has_ext_modules),
                     ('build_scripts', has_scripts),
                    ]
+
+# class build

@@ -13,7 +13,6 @@ from ..fixer_util import Name, Call, in_special_context
 
 class FixZip(fixer_base.ConditionalFix):
 
-    BM_compatible = True
     PATTERN = """
     power< 'zip' args=trailer< '(' [any] ')' >
     >
@@ -29,7 +28,7 @@ class FixZip(fixer_base.ConditionalFix):
             return None
 
         new = node.clone()
-        new.prefix = ""
-        new = Call(Name("list"), [new])
+        new.prefix = u""
+        new = Call(Name(u"list"), [new])
         new.prefix = node.prefix
         return new

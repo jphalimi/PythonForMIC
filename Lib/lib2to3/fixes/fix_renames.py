@@ -20,8 +20,8 @@ def alternates(members):
 
 def build_pattern():
     #bare = set()
-    for module, replace in list(MAPPING.items()):
-        for old_attr, new_attr in list(replace.items()):
+    for module, replace in MAPPING.items():
+        for old_attr, new_attr in replace.items():
             LOOKUP[(module, old_attr)] = new_attr
             #bare.add(module)
             #bare.add(old_attr)
@@ -40,7 +40,6 @@ def build_pattern():
 
 
 class FixRenames(fixer_base.BaseFix):
-    BM_compatible = True
     PATTERN = "|".join(build_pattern())
 
     order = "pre" # Pre-order tree traversal
@@ -66,5 +65,5 @@ class FixRenames(fixer_base.BaseFix):
         #import_mod = results.get("module")
 
         if mod_name and attr_name:
-            new_attr = LOOKUP[(mod_name.value, attr_name.value)]
+            new_attr = unicode(LOOKUP[(mod_name.value, attr_name.value)])
             attr_name.replace(Name(new_attr, prefix=attr_name.prefix))

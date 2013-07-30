@@ -1,17 +1,17 @@
 """Tests for HTMLParser.py."""
 
-import html.parser
+import HTMLParser
 import pprint
 import unittest
-from test import support
+from test import test_support
 
 
-class EventCollector(html.parser.HTMLParser):
+class EventCollector(HTMLParser.HTMLParser):
 
-    def __init__(self, *args, **kw):
+    def __init__(self):
         self.events = []
         self.append = self.events.append
-        html.parser.HTMLParser.__init__(self, *args, **kw)
+        HTMLParser.HTMLParser.__init__(self)
 
     def get_events(self):
         # Normalize the list of events so that buffer artefacts don't
@@ -72,10 +72,8 @@ class EventCollectorExtra(EventCollector):
 
 class TestCaseBase(unittest.TestCase):
 
-    def _run_check(self, source, expected_events, collector=None):
-        if collector is None:
-            collector = EventCollector()
-        parser = collector
+    def _run_check(self, source, expected_events, collector=EventCollector):
+        parser = collector()
         for s in source:
             parser.feed(s)
         parser.close()
@@ -86,14 +84,14 @@ class TestCaseBase(unittest.TestCase):
                       "\nReceived:\n" + pprint.pformat(events))
 
     def _run_check_extra(self, source, events):
-        self._run_check(source, events, EventCollectorExtra())
+        self._run_check(source, events, EventCollectorExtra)
 
     def _parse_error(self, source):
         def parse(source=source):
-            parser = html.parser.HTMLParser()
+            parser = HTMLParser.HTMLParser()
             parser.feed(source)
             parser.close()
-        self.assertRaises(html.parser.HTMLParseError, parse)
+        self.assertRaises(HTMLParser.HTMLParseError, parse)
 
 
 class HTMLParserTestCase(TestCaseBase):
@@ -137,13 +135,6 @@ text
     ("endtag", "html"),
     ("data", "\n"),
     ])
-
-    def test_malformatted_charref(self):
-        self._run_check("<p>&#bad;</p>", [
-            ("starttag", "p", []),
-            ("data", "&#bad;"),
-            ("endtag", "p"),
-        ])
 
     def test_unclosed_entityref(self):
         self._run_check("&entityref foo", [
@@ -215,23 +206,6 @@ DOCTYPE html [
         # Regression test for SF bug #921657.
         self._run_check("<a href=mailto:xyz@example.com>", [
             ("starttag", "a", [("href", "mailto:xyz@example.com")]),
-            ])
-
-    def test_attr_nonascii(self):
-        # see issue 7311
-        self._run_check("<img src=/foo/bar.png alt=\u4e2d\u6587>", [
-            ("starttag", "img", [("src", "/foo/bar.png"),
-                                 ("alt", "\u4e2d\u6587")]),
-            ])
-        self._run_check("<a title='\u30c6\u30b9\u30c8' "
-                        "href='\u30c6\u30b9\u30c8.html'>", [
-            ("starttag", "a", [("title", "\u30c6\u30b9\u30c8"),
-                               ("href", "\u30c6\u30b9\u30c8.html")]),
-            ])
-        self._run_check('<a title="\u30c6\u30b9\u30c8" '
-                        'href="\u30c6\u30b9\u30c8.html">', [
-            ("starttag", "a", [("title", "\u30c6\u30b9\u30c8"),
-                               ("href", "\u30c6\u30b9\u30c8.html")]),
             ])
 
     def test_attr_entity_replacement(self):
@@ -336,51 +310,19 @@ DOCTYPE html [
 
     def test_entityrefs_in_attributes(self):
         self._run_check("<html foo='&euro;&amp;&#97;&#x61;&unsupported;'>", [
-                ("starttag", "html", [("foo", "\u20AC&aa&unsupported;")])
+                ("starttag", "html", [("foo", u"\u20AC&aa&unsupported;")])
                 ])
 
-
-class HTMLParserTolerantTestCase(TestCaseBase):
-
-    def setUp(self):
-        self.collector = EventCollector(strict=False)
-
-    def test_tolerant_parsing(self):
-        self._run_check('<html <html>te>>xt&a<<bc</a></html>\n'
-                        '<img src="URL><//img></html</html>', [
-                             ('data', '<html '),
-                             ('starttag', 'html', []),
-                             ('data', 'te>>xt'),
-                             ('entityref', 'a'),
-                             ('data', '<<bc'),
-                             ('endtag', 'a'),
-                             ('endtag', 'html'),
-                             ('data', '\n<img src="URL><//img></html'),
-                             ('endtag', 'html')],
-                        collector = self.collector)
-
-    def test_comma_between_attributes(self):
-        self._run_check('<form action="/xxx.php?a=1&amp;b=2&amp", '
-                        'method="post">', [
-                            ('starttag', 'form',
-                                [('action', '/xxx.php?a=1&b=2&amp'),
-                                 ('method', 'post')])],
-                        collector = self.collector)
-
-    def test_weird_chars_in_unquoted_attribute_values(self):
-        self._run_check('<form action=bogus|&#()value>', [
-                            ('starttag', 'form',
-                                [('action', 'bogus|&#()value')])],
-                        collector = self.collector)
-
-    def test_unescape_function(self):
-        p = html.parser.HTMLParser()
-        self.assertEqual(p.unescape('&#bad;'),'&#bad;')
-        self.assertEqual(p.unescape('&#0038;'),'&')
+    def test_malformatted_charref(self):
+        self._run_check("<p>&#bad;</p>", [
+            ("starttag", "p", []),
+            ("data", "&#bad;"),
+            ("endtag", "p"),
+        ])
 
 
 def test_main():
-    support.run_unittest(HTMLParserTestCase, HTMLParserTolerantTestCase)
+    test_support.run_unittest(HTMLParserTestCase)
 
 
 if __name__ == "__main__":
