@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Skip process if Python is already built
+if [ -f compiled ]
+then
+   exit 0
+fi
+
+patch -p1 -R < Python-2.6.6-xcompile.patch
+
 echo "Configuring Python host... "
 ./configure
 echo "done";
@@ -33,8 +41,7 @@ echo "Installing Python for MIC in ./_binaries/"
 make install HOSTPYTHON=./hostpython  CROSS_COMPILE_TARGET=yes prefix=_binaries/
 echo "done"
 
-echo "You can now copy the content of ./_binaries/ to mic0:/bin"
-echo "Congrats, your installation is ready to use"
+touch compiled
 
 echo "======================================================="
 echo "PythonForMIC ready"
@@ -42,3 +49,4 @@ echo "------------------"
 echo "Please copy the _binaries folder to the mic card with the following command:"
 echo "\t scp -r ./_binaries/  mic0:~/"
 echo ""
+
